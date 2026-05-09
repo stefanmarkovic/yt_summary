@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "YT Summary AI",
+  "version": "3.0",
+  "description": "AI sažetak YouTube videa (v3.0).",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://*.youtube.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://sponsor.ajay.app/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "48": "icons/icon-48.png"
+    }
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "yt-summary-ai@stefan.local"
+    }
+  }
+}
