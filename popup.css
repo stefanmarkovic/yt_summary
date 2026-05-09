@@ -1,0 +1,179 @@
+<<<<<<< HEAD
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  width: 350px;
+  margin: 0;
+  padding: 15px;
+  background-color: #f9f9f9;
+  color: #333;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+header h2 {
+  margin: 0;
+  color: #c00; /* YouTube Red */
+  font-size: 1.2rem;
+  text-align: center;
+}
+
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hidden {
+  display: none;
+}
+
+input, select, button {
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  font-size: 0.9rem;
+}
+
+button {
+  background-color: #c00;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+button:hover {
+  background-color: #a00;
+}
+
+button.secondary {
+  background-color: #eee;
+  color: #666;
+  margin-top: 10px;
+}
+
+#summary-content {
+  background: white;
+  padding: 10px;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.status-msg {
+  font-size: 0.85rem;
+  color: #666;
+  font-style: italic;
+  text-align: center;
+}
+
+#stats {
+  font-size: 0.75rem;
+  color: #888;
+  margin-top: 5px;
+}
+
+.hint {
+  font-size: 0.75rem;
+  color: #999;
+}
+
+a { color: #0066cc; text-decoration: none; }
+=======
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  width: 350px;
+  margin: 0;
+  padding: 15px;
+  background-color: #f9f9f9;
+  color: #333;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+header h2 {
+  margin: 0;
+  color: #c00; /* YouTube Red */
+  font-size: 1.2rem;
+  text-align: center;
+}
+
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hidden {
+  display: none;
+}
+
+input, select, button {
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  font-size: 0.9rem;
+}
+
+button {
+  background-color: #c00;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+button:hover {
+  background-color: #a00;
+}
+
+button.secondary {
+  background-color: #eee;
+  color: #666;
+  margin-top: 10px;
+}
+
+#summary-content {
+  background: white;
+  padding: 10px;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.status-msg {
+  font-size: 0.85rem;
+  color: #666;
+  font-style: italic;
+  text-align: center;
+}
+
+#stats {
+  font-size: 0.75rem;
+  color: #888;
+  margin-top: 5px;
+}
+
+.hint {
+  font-size: 0.75rem;
+  color: #999;
+}
+
+a { color: #0066cc; text-decoration: none; }
+>>>>>>> e0c10d3 (v3.0 - Final implementation and UI updates)
