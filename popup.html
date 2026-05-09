@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h2>YT Summary AI <small>v3.0</small></h2>
+    </header>
+
+    <div id="setup-view" class="view hidden">
+      <p>Unesite vaš Gemini API ključ:</p>
+      <input type="password" id="api-key-input" placeholder="AIza...">
+      <button id="save-key-btn">Sačuvaj ključ</button>
+      <p class="hint">Nabavite ključ na <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a></p>
+    </div>
+
+    <div id="main-view" class="view">
+      <div class="options">
+        <label>Detaljnost:</label>
+        <select id="detail-level">
+          <option value="1">Kratko</option>
+          <option value="2" selected>Srednje</option>
+          <option value="3">Detaljno</option>
+        </select>
+      </div>
+
+      <button id="summarize-btn">Generiši sažetak</button>
+      
+      <div id="status" class="status-msg"></div>
+
+      <div id="debug-area" class="hidden">
+        <hr>
+        <p style="font-size: 10px; color: red;">DEBUG INFO:</p>
+        <textarea id="debug-log" readonly style="font-size: 10px; height: 100px; width: 100%;"></textarea>
+      </div>
+      
+<<<<<<< HEAD
+      <button id="settings-btn" class="oecondary">Podešavanja</button>
+=======
+      <button id="settings-btn" class="secondary">Podešavanja</button>
+>>>>>>> e0c10d3 (v3.0 - Final implementation and UI updates)
+      <button id="debug-btn" style="background: #666; font-size: 10px; padding: 2px; margin-top: 5px;">Prikaži Debug</button>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
