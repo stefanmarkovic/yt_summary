@@ -12,6 +12,20 @@ const DETAIL_PROMPTS = {
 // gemini-3-flash-preview: $0.10/1M input, $0.40/1M output
 const GEMINI_PRICING = { input: 0.10, output: 0.40 };
 
+async function geminiSummarize(apiKey, transcript, detailLevel) {
+  const contents = [{ parts: [{ text: `Transkript: ${transcript}\n\nInstrukcija: ${DETAIL_PROMPTS[detailLevel]} na srpskom jeziku.` }] }];
+  return await geminiRequest(apiKey, contents);
+}
+
+async function geminiChat(apiKey, transcript, history, userMessage) {
+  const contents = [
+    { role: "user", parts: [{ text: `Ovo je transkript YouTube videa: ${transcript}\n\nOdgovaraj na pitanja na osnovu ovog transkripta na srpskom jeziku.` }] },
+    ...history,
+    { role: "user", parts: [{ text: userMessage }] }
+  ];
+  return await geminiRequest(apiKey, contents);
+}
+
 async function geminiRequest(apiKey, contents) {
   const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
     method: 'POST',
