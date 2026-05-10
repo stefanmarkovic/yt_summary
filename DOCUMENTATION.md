@@ -8,7 +8,7 @@ Firefox (Manifest V3) ekstenzija koja:
 3. Šalje filtrirani tekst Gemini AI-u za generisanje sažetka na srpskom jeziku
 4. Prikazuje sažetak u novom tabu sa chat funkcionalnostima
 
-**Verzija:** 3.0
+**Verzija:** 3.1
 **Model:** `gemini-3-flash-preview`
 
 ---
@@ -20,9 +20,12 @@ yt_summary/
 ├── manifest.json          # MV3 manifest (permissions, host_permissions)
 ├── popup.html             # Popup UI: API key setup, summarize dugme, debug log
 ├── popup.css              # Stilovi popup-a
-├── popup.js               # Centralna logika: transcript, SponsorBlock, Gemini
-├── gemini.js              # Zajednički Gemini API modul (model, promptovi, cene)
-├── result.html            # Stranica rezultata (inline CSS, ~390 linija stilova)
+├── popup.js               # Orchestrator: upravlja pipelajnom
+├── gemini.js              # Shared Gemini API: promptovi i request logic
+├── transcript-fetcher.js  # MODUL: Dohvatanje transkripta (MAIN world)
+├── transcript-parser.js   # MODUL: Parsiranje XML-a
+├── sponsor-filter.js      # MODUL: SponsorBlock API i filtriranje
+├── result.html            # Stranica rezultata (inline CSS)
 ├── result.js              # Logika rezultata: markdown, regeneracija, chat
 ├── icons/
 │   └── icon-48.png
@@ -61,13 +64,13 @@ scripting.executeScript ◄────────── 3. Inject fetchTranscr
 
 ### Tok izvršavanja (`startAnalysis`)
 
-1. **Validacija** — provera da li je korisnik na YouTube videu, ekstrakcija `videoId`
-2. **SponsorBlock** — `getSponsorSegments(videoId)` fetch iz popup konteksta (nema CORS problema)
-3. **Transcript** — `scripting.executeScript(world: "MAIN", func: fetchTranscriptInPageContext)` na aktivnom tabu
-4. **Parsiranje** — `parseXmlTranscript()` konvertuje XML → `{text, startSec, durSec}[]`
-5. **Filtriranje** — `filterSegments()` uklanja segmente koji se poklapaju sa SponsorBlock vremenima
-6. **Gemini** — `callGemini(text)` šalje filtrirani tekst, vraća `{summary, usage}`
-7. **Storage + Tab** — čuva rezultat u `browser.storage.local`, transkript u `browser.storage.session`, otvara `result.html`
+1. **Validacija** — provera URL-a, ekstrakcija `videoId`
+2. **SponsorBlock** — poziva `getSponsorSegments(videoId)` iz `sponsor-filter.js`
+3. **Transcript** — injectuje `fetchTranscriptInPageContext` iz `transcript-fetcher.js`
+4. **Parsiranje** — poziva `parseXmlTranscript()` iz `transcript-parser.js`
+5. **Filtriranje** — poziva `filterSegments()` iz `sponsor-filter.js`
+6. **Gemini** — poziva `geminiSummarize()` iz `gemini.js`
+7. **Storage + Tab** — čuva rezultat i otvara `result.html`
 
 ### fetchTranscriptInPageContext (MAIN world)
 
