@@ -199,12 +199,6 @@ POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-prev
 
 ---
 
-## Poznati Tehnički Dug
-
-### Inline CSS
-- `popup.html` koristi CSS klase definisane u `popup.css` (prethodni inline stilovi premešeni u v3.2)
-
----
 
 ## Debugging
 
