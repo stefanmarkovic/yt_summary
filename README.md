@@ -1,46 +1,37 @@
 # YT Summary AI
 
-A Firefox (Manifest V3) extension that generates AI summaries of YouTube videos in Serbian. It fetches transcripts, filters out sponsored segments using SponsorBlock, and uses Gemini AI to produce the summary.
+Firefox (Manifest V3) ekstenzija koja generiše AI sažetke YouTube videa na srpskom jeziku. Preuzima transkript, filtrira sponzorisane segmente (SponsorBlock), i koristi Gemini AI za sumarizaciju.
 
-## Features
+## Funkcionalnosti
 
-- **Automated Summarization:** Uses Google's Gemini AI to summarize YouTube video transcripts.
-- **SponsorBlock Integration:** Automatically removes sponsored segments, self-promotions, and other non-content parts before summarization.
-- **Serbian Language Support:** Designed specifically to provide summaries in Serbian.
-- **Robust Transcript Fetching:** Implements a fallback chain for fetching transcripts, including direct page context access and DOM scraping.
-- **Clean UI:** Simple popup interface for configuration and triggering summaries.
+- **AI Sumarizacija:** Koristi Google Gemini (`gemini-3-flash-preview`) za sažimanje transkripata.
+- **SponsorBlock:** Automatski uklanja sponzore, samopromotivne segmente, intro/outro i interakcije pre sumarizacije.
+- **Tri nivoa detaljnosti:** Kratko, srednje, ili detaljno — bira se pre i posle generisanja.
+- **Chat sa AI-jem:** Postavljanje pitanja o videu direktno na stranici rezultata.
+- **Robustan transcript fetch:** Fallback lanac (captionTracks → InnerTube → DOM scraping) u YouTube page kontekstu.
 
-## Architecture
+## Arhitektura
 
-The extension operates by executing scripts in the YouTube page context to bypass standard extension limitations when fetching transcripts.
+1. **Transcript** — `scripting.executeScript(world: "MAIN")` izvršava fetch u YouTube page kontekstu (3 metoda u fallback lancu).
+2. **Filtriranje** — SponsorBlock API uklanja sponzorisane segmente iz transkripta.
+3. **AI** — Filtrirani tekst se šalje Gemini API-ju (`gemini-3-flash-preview`).
+4. **Prikaz** — Sažetak se prikazuje u novom tabu sa markdown renderingom, chat-om, i copy opcijama.
 
-1. **Transcript Extraction:** Attempts multiple methods in order:
-   - Direct fetch from `captionTracks` in page context.
-   - InnerTube API calls.
-   - DOM scraping (fallback).
-2. **Filtering:** Queries SponsorBlock API to identify and remove irrelevant segments.
-3. **AI Processing:** Sends the filtered text to Gemini AI (gemini-1.5-flash) via API.
-4. **Display:** Renders the resulting markdown in a new tab.
+## Struktura projekta
 
-## Project Structure
+- `manifest.json` — MV3 konfiguracija ekstenzije
+- `popup.html/css/js` — Popup interfejs i centralna logika
+- `result.html/js` — Stranica za prikaz rezultata (sažetak, chat, regeneracija)
+- `DOCUMENTATION.md` — Detaljna tehnička dokumentacija
 
-- `manifest.json`: Extension configuration (MV3).
-- `popup.html/css/js`: Main extension interface and core logic.
-- `result.html/js`: Summary display page.
-- `icons/`: Extension icons.
+## Instalacija
 
-## Installation
+1. Klonirajte repozitorijum.
+2. Otvorite Firefox → `about:debugging#/runtime/this-firefox`.
+3. Kliknite "Load Temporary Add-on".
+4. Izaberite `manifest.json` iz direktorijuma projekta.
 
-1. Clone this repository.
-2. Open Firefox and navigate to `about:debugging#/runtime/this-firefox`.
-3. Click "Load Temporary Add-on".
-4. Select `manifest.json` from the project directory.
+## Konfiguracija
 
-## Configuration
-
-- Obtain a Gemini API key from Google AI Studio.
-- Enter the API key in the extension popup settings.
-
-## License
-
-MIT (or check local conventions)
+1. Nabavite Gemini API ključ na [Google AI Studio](https://aistudio.google.com/app/apikey).
+2. Unesite ključ u popup podešavanjima ekstenzije.

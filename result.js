@@ -126,34 +126,14 @@ async function regenerateSummary(level) {
   document.getElementById('summary').style.opacity = '0.5';
   
   try {
-    const detailPrompts = { "1": "Kratak rezime.", "2": "Srednji rezime sa buletima.", "3": "Veoma detaljan rezime." };
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${currentApiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `Transkript: ${currentTranscript}\n\nInstrukcija: ${detailPrompts[level]} na srpskom jeziku.` }] }]
-        })
-      }
-    );
-    const resultJson = await response.json();
-    if (resultJson.error) throw new Error(resultJson.error.message);
-
-    const summary = resultJson.candidates[0].content.parts[0].text;
-    const meta = resultJson.usageMetadata || {};
-    const promptTokens = meta.promptTokenCount || 0;
-    const outputTokens = meta.candidatesTokenCount || 0;
-    const totalTokens = meta.totalTokenCount || (promptTokens + outputTokens);
-    const costInput = (promptTokens / 1_000_000) * 0.10;
-    const costOutput = (outputTokens / 1_000_000) * 0.40;
-    const estimatedCost = (costInput + costOutput).toFixed(6);
+    const contents = [{ parts: [{ text: `Transkript: ${currentTranscript}\n\nInstrukcija: ${DETAIL_PROMPTS[level]} na srpskom jeziku.` }] }];
+    const result = await geminiRequest(currentApiKey, contents);
 
     const storageData = await browser.storage.local.get('yt_summary_result');
     const newResult = {
       ...storageData.yt_summary_result,
-      summary,
-      usage: { promptTokens, outputTokens, totalTokens, estimatedCost },
+      summary: result.text,
+      usage: result.usage,
       timestamp: Date.now()
     };
 
@@ -195,29 +175,17 @@ async function sendChatMessage() {
   appendChatMessage('user', text);
   
   try {
-    // Konstruiši contents za Gemini. Prvi je uvek transkript.
     const contents = [
       { role: "user", parts: [{ text: `Ovo je transkript YouTube videa: ${currentTranscript}\n\nOdgovaraj na pitanja na osnovu ovog transkripta na srpskom jeziku.` }] },
       ...chatHistory,
       { role: "user", parts: [{ text: text }] }
     ];
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${currentApiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents })
-      }
-    );
-    const resultJson = await response.json();
-    if (resultJson.error) throw new Error(resultJson.error.message);
-
-    const aiResponse = resultJson.candidates[0].content.parts[0].text;
-    appendChatMessage('model', aiResponse);
+    const result = await geminiRequest(currentApiKey, contents);
+    appendChatMessage('model', result.text);
     
     chatHistory.push({ role: "user", parts: [{ text: text }] });
-    chatHistory.push({ role: "model", parts: [{ text: aiResponse }] });
+    chatHistory.push({ role: "model", parts: [{ text: result.text }] });
     
   } catch (e) {
     appendChatMessage('model', "Greška: " + e.message);

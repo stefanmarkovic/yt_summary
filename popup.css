@@ -15,7 +15,8 @@ body {
 
 header h2 {
   margin: 0;
-  color: #c00; /* YouTube Red */
+  color: #c00;
+  /* YouTube Red */
   font-size: 1.2rem;
   text-align: center;
 }
@@ -30,7 +31,9 @@ header h2 {
   display: none;
 }
 
-input, select, button {
+input,
+select,
+button {
   padding: 10px;
   border-radius: 6px;
   border: 1px solid #ddd;
@@ -55,18 +58,6 @@ button.secondary {
   margin-top: 10px;
 }
 
-#summary-content {
-  background: white;
-  padding: 10px;
-  border: 1px solid #eee;
-  border-radius: 4px;
-  max-height: 300px;
-  overflow-y: auto;
-  font-size: 0.9rem;
-  line-height: 1.4;
-  white-space: pre-wrap;
-}
-
 .status-msg {
   font-size: 0.85rem;
   color: #666;
@@ -74,15 +65,12 @@ button.secondary {
   text-align: center;
 }
 
-#stats {
-  font-size: 0.75rem;
-  color: #888;
-  margin-top: 5px;
-}
-
 .hint {
   font-size: 0.75rem;
   color: #999;
 }
 
-a { color: #0066cc; text-decoration: none; }
+a {
+  color: #0066cc;
+  text-decoration: none;
+}

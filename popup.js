@@ -446,32 +446,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function callGemini(text) {
     const { gemini_api_key } = await browser.storage.local.get('gemini_api_key');
     const detail = document.getElementById('detail-level').value;
-    const detailPrompts = { "1": "Kratak rezime.", "2": "Srednji rezime sa buletima.", "3": "Veoma detaljan rezime." };
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${gemini_api_key}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `Transkript: ${text}\n\nInstrukcija: ${detailPrompts[detail]} na srpskom jeziku.` }] }]
-        })
-      }
-    );
-    const result = await response.json();
-    if (result.error) throw new Error(result.error.message);
-
-    const meta = result.usageMetadata || {};
-    const promptTokens = meta.promptTokenCount || 0;
-    const outputTokens = meta.candidatesTokenCount || 0;
-    const totalTokens = meta.totalTokenCount || (promptTokens + outputTokens);
-    // gemini-3-flash-preview: $0.10/1M input, $0.40/1M output
-    const costInput = (promptTokens / 1_000_000) * 0.10;
-    const costOutput = (outputTokens / 1_000_000) * 0.40;
-    const estimatedCost = (costInput + costOutput).toFixed(6);
-
-    return {
-      summary: result.candidates[0].content.parts[0].text,
-      usage: { promptTokens, outputTokens, totalTokens, estimatedCost }
-    };
+    const contents = [{ parts: [{ text: `Transkript: ${text}\n\nInstrukcija: ${DETAIL_PROMPTS[detail]} na srpskom jeziku.` }] }];
+    const result = await geminiRequest(gemini_api_key, contents);
+    return { summary: result.text, usage: result.usage };
   }
 });
