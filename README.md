@@ -7,7 +7,7 @@ Firefox (Manifest V3) ekstenzija koja generiše AI sažetke YouTube videa na srp
 - **AI Sumarizacija:** Koristi Google Gemini API za generisanje kvalitetnih sažetaka transkripata.
 - **SponsorBlock Integracija:** Automatski prepoznaje i uklanja sponzorske poruke, samopromociju, intro/outro i interakcije pre nego što se tekst pošalje AI-u (štedi tokene i poboljšava kvalitet).
 - **Fleksibilan nivo detaljnosti:** Izaberite između kratkog, srednjeg i veoma detaljnog rezimea pre i posle generisanja.
-- **Chat sa AI-jem:** Prijatno sučelje koje omogućava korisniku da postavlja pitanja o videu.
+- **Chat sa AI-jem:** Interfejs koji omogućava korisniku da postavlja pitanja o videu.
 - **Robusno dohvatanje transkripta:** Kompleksan fallback lanac za prevazilaženje restrikcija (koristi direktan YouTube context, InnerTube API, i po potrebi DOM scraping).
 - **Bezbednost:** Ugrađena sanitizacija Markdown renderovanja radi zaštite od XSS-a.
 
@@ -15,7 +15,7 @@ Firefox (Manifest V3) ekstenzija koja generiše AI sažetke YouTube videa na srp
 
 1. **Transcript:** Kroz `scripting.executeScript(world: "MAIN")` ekstenzija pokreće logiku u izolovanom *page context*-u (glavnom YouTube prozoru) omogućavajući premošćavanje mnogih zaštita.
 2. **Filtriranje:** Korišćenjem javnog SponsorBlock API-ja transkript se reže tačno na mestima gde se pojavljuju definisani nebitni segmenti.
-3. **Generisanje (AI):** Poziva se v1beta Gemini API.
+3. **Generisanje (AI):** Poziva se Google Gemini API (koristi se v1beta endpoint).
 4. **Prikaz rezultata:** Ekstenzija otvara poseban lokalni tab gde prikazuje renderovan (bezbedan) Markdown, chat UI, potrošnju API-ja, i informacije o vremenu sačuvanom pomoću SponsorBlock-a.
 
 ## Struktura projekta
