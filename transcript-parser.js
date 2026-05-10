@@ -6,7 +6,12 @@ function parseXmlTranscript(xmlText) {
   const segments = [];
   for (const el of doc.querySelectorAll('text')) {
     if (!el.textContent) continue;
-    const text = el.textContent.replace(/<[^>]*>/g, '');
+    let text = el.textContent;
+    let prevText;
+    do {
+      prevText = text;
+      text = text.replace(/<[^>]*>/g, '');
+    } while (text !== prevText);
     segments.push({
       text,
       startSec: parseFloat(el.getAttribute('start') || '0'),
