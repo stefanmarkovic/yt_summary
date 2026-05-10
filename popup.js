@@ -1,6 +1,6 @@
-// YT Summary AI - popup.js v3.1
+// YT Summary AI - popup.js v3.2
 
-const PLUGIN_VERSION = "3.1";
+const PLUGIN_VERSION = "3.2";
 
 document.addEventListener('DOMContentLoaded', async () => {
   const setupView = document.getElementById('setup-view');
@@ -13,6 +13,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const debugArea = document.getElementById('debug-area');
   const debugLog = document.getElementById('debug-log');
   const statusDiv = document.getElementById('status');
+
+  document.getElementById('plugin-version').textContent = `v${PLUGIN_VERSION}`;
 
   function log(msg) {
     const timestamp = new Date().toLocaleTimeString();

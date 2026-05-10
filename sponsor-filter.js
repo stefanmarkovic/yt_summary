@@ -19,7 +19,8 @@ function filterSegments(segments, sponsorSegments) {
   const skipRanges = sponsorSegments.map(s => s.segment);
   let savedSeconds = 0;
   const filtered = segments.filter(seg => {
-    const isSkipped = skipRanges.some(([s, e]) => seg.startSec >= s && seg.startSec <= e);
+    const segEnd = seg.startSec + seg.durSec;
+    const isSkipped = skipRanges.some(([s, e]) => seg.startSec < e && segEnd > s);
     if (isSkipped) { savedSeconds += seg.durSec; return false; }
     return true;
   });

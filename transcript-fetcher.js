@@ -28,6 +28,7 @@ async function fetchTranscriptInPageContext(videoId) {
         if (parts.length === 2) startSec = parts[0] * 60 + parts[1];
         if (parts.length === 3) startSec = parts[0] * 3600 + parts[1] * 60 + parts[2];
       }
+      // Fiksno trajanje: DOM ne pruža tačan dur; utiče na preciznost SponsorBlock filtriranja
       if (text) segments.push({ text, start: startSec.toFixed(3), dur: '5.000' });
     });
     return { status: 'ok', transcriptXml: makeXml(segments), debugLines: D };
@@ -51,10 +52,15 @@ async function fetchTranscriptInPageContext(videoId) {
     dbg("M1: ytInitialPlayerResponse baseUrl");
     let captionTracks = null;
     if (window.ytInitialPlayerResponse) {
-      const ct = window.ytInitialPlayerResponse.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-      if (ct?.length) {
-        captionTracks = ct;
-        dbg(`M1: ${ct.length} tracks`);
+      const responseVideoId = window.ytInitialPlayerResponse.videoDetails?.videoId;
+      if (responseVideoId && responseVideoId !== videoId) {
+        dbg(`M1: stale data (${responseVideoId} != ${videoId}), preskačem`);
+      } else {
+        const ct = window.ytInitialPlayerResponse.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+        if (ct?.length) {
+          captionTracks = ct;
+          dbg(`M1: ${ct.length} tracks`);
+        }
       }
     }
 

@@ -15,6 +15,8 @@ function formatDuration(seconds) {
 
 function markdownToHtml(md) {
   let html = md;
+  // Sanitizacija: escape HTML pre markdown transformacija (K2: XSS zaštita)
+  html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
   html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
   html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
@@ -22,11 +24,16 @@ function markdownToHtml(md) {
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-  html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
+  // Blockquote: &gt; je escaped >, spoji uzastopne linije
+  html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+  html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n');
   html = html.replace(/^---$/gm, '<hr>');
+  // Ordered lists: označi pre unordered da ne bi bile obuhvaćene <ul>
+  html = html.replace(/^\d+\. (.+)$/gm, '<OLI>$1</OLI>');
   html = html.replace(/^[\*\-] (.+)$/gm, '<li>$1</li>');
   html = html.replace(/((<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
-  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/((<OLI>.*<\/OLI>\n?)+)/g, (match) =>
+    '<ol>' + match.replace(/OLI/g, 'li') + '</ol>');
   html = html.replace(/\n\n+/g, '\n\n');
   html = html.split('\n\n').map(block => {
     block = block.trim();
@@ -90,7 +97,7 @@ function updateSummaryUI(result) {
     usageContainer.innerHTML = `
       <div class="usage-header">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1010 10A10 10 0 0012 2z"/><path d="M12 6v6l4 2"/></svg>
-        <span>gemini-3-flash-preview</span>
+        <span>${GEMINI_MODEL}</span>
       </div>
       <div class="usage-grid">
         <div class="usage-item">
@@ -234,8 +241,9 @@ async function init() {
     });
 
     document.getElementById('copy-text-btn').addEventListener('click', async function() {
-      const data = await browser.storage.local.get('yt_summary_result');
-      const plain = data.yt_summary_result.summary.replace(/[#*`>_\-]/g, '').replace(/\n{3,}/g, '\n\n');
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = document.getElementById('summary').innerHTML;
+      const plain = tempDiv.textContent.replace(/\n{3,}/g, '\n\n');
       await navigator.clipboard.writeText(plain);
       this.classList.add('copied');
       const originalHtml = this.innerHTML;

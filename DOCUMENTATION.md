@@ -8,7 +8,7 @@ Firefox (Manifest V3) ekstenzija koja:
 3. Šalje filtrirani tekst Gemini AI-u za generisanje sažetka na srpskom jeziku
 4. Prikazuje sažetak u novom tabu sa chat funkcionalnostima
 
-**Verzija:** 3.1
+**Verzija:** 3.2
 **Model:** `gemini-3-flash-preview`
 
 ---
@@ -25,7 +25,8 @@ yt_summary/
 ├── transcript-fetcher.js  # MODUL: Dohvatanje transkripta (MAIN world)
 ├── transcript-parser.js   # MODUL: Parsiranje XML-a
 ├── sponsor-filter.js      # MODUL: SponsorBlock API i filtriranje
-├── result.html            # Stranica rezultata (inline CSS)
+├── result.html            # Stranica rezultata
+├── result.css             # Stilovi stranice rezultata
 ├── result.js              # Logika rezultata: markdown, regeneracija, chat
 ├── icons/
 │   └── icon-48.png
@@ -101,7 +102,9 @@ Ova funkcija se izvršava **u YouTube page kontekstu** — ima pristup cookie-ji
 | `parseXmlTranscript(xml)` | DOMParser → niz `{text, startSec, durSec}` |
 | `filterSegments(segs, sponsorSegs)` | Filtrira segmente po SponsorBlock vremenima, vraća `{text, savedSeconds, categoryStats}` |
 | `getSponsorSegments(videoId)` | Fetch SponsorBlock API, kategorije: sponsor, selfpromo, interaction, intro, outro |
-| `callGemini(text)` | POST Gemini API, parsira `usageMetadata`, računa cenu |
+| `geminiSummarize(key, text, level)` | POST Gemini API za sumarizaciju, parsira `usageMetadata`, računa cenu |
+| `geminiChat(key, transcript, history, msg)` | POST Gemini API za chat sa `systemInstruction` kontekstom |
+| `geminiRequest(key, contents, sysInstr)` | Zajednički HTTP sloj: `x-goog-api-key` header, timeout, error handling |
 | `showView(view)` | Toggle između setup/main view-a |
 | `log(msg)` | Piše u debug textarea i console |
 
@@ -199,8 +202,7 @@ POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-prev
 ## Poznati Tehnički Dug
 
 ### Inline CSS
-- `popup.html` ima inline `style` atribute na debug elementima (linije 36, 37, 41)
-- `result.html` sadrži ~390 linija CSS-a u `<style>` tagu umesto u eksternom fajlu
+- `popup.html` koristi CSS klase definisane u `popup.css` (prethodni inline stilovi premešeni u v3.2)
 
 ---
 

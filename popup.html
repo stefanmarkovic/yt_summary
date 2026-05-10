@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="sr">
 <head>
   <meta charset="UTF-8">
   <link rel="stylesheet" href="popup.css">
@@ -7,7 +7,7 @@
 <body>
   <div class="container">
     <header>
-      <h2>YT Summary AI <small>v3.1</small></h2>
+      <h2>YT Summary AI <small id="plugin-version"></small></h2>
     </header>
 
     <div id="setup-view" class="view hidden">
@@ -33,12 +33,12 @@
 
       <div id="debug-area" class="hidden">
         <hr>
-        <p style="font-size: 10px; color: red;">DEBUG INFO:</p>
-        <textarea id="debug-log" readonly style="font-size: 10px; height: 100px; width: 100%;"></textarea>
+        <p class="debug-info-label">DEBUG INFO:</p>
+        <textarea id="debug-log" class="debug-log-area" readonly></textarea>
       </div>
       
       <button id="settings-btn" class="secondary">Podešavanja</button>
-      <button id="debug-btn" style="background: #666; font-size: 10px; padding: 2px; margin-top: 5px;">Prikaži Debug</button>
+      <button id="debug-btn" class="debug-toggle">Prikaži Debug</button>
     </div>
   </div>
   <script src="gemini.js"></script>
