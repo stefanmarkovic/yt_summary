@@ -126,8 +126,7 @@ async function regenerateSummary(level) {
   document.getElementById('summary').style.opacity = '0.5';
   
   try {
-    const contents = [{ parts: [{ text: `Transkript: ${currentTranscript}\n\nInstrukcija: ${DETAIL_PROMPTS[level]} na srpskom jeziku.` }] }];
-    const result = await geminiRequest(currentApiKey, contents);
+    const result = await geminiSummarize(currentApiKey, currentTranscript, level);
 
     const storageData = await browser.storage.local.get('yt_summary_result');
     const newResult = {
@@ -175,13 +174,7 @@ async function sendChatMessage() {
   appendChatMessage('user', text);
   
   try {
-    const contents = [
-      { role: "user", parts: [{ text: `Ovo je transkript YouTube videa: ${currentTranscript}\n\nOdgovaraj na pitanja na osnovu ovog transkripta na srpskom jeziku.` }] },
-      ...chatHistory,
-      { role: "user", parts: [{ text: text }] }
-    ];
-
-    const result = await geminiRequest(currentApiKey, contents);
+    const result = await geminiChat(currentApiKey, currentTranscript, chatHistory, text);
     appendChatMessage('model', result.text);
     
     chatHistory.push({ role: "user", parts: [{ text: text }] });
