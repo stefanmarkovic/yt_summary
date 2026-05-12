@@ -1,0 +1,14 @@
+{
+  "name": "yt-summary-ai",
+  "version": "3.2.0",
+  "description": "AI sažetak YouTube videa",
+  "scripts": {
+    "package": "web-ext build --overwrite-dest",
+    "package:ps": "powershell -ExecutionPolicy Bypass -File package.ps1",
+    "lint": "web-ext lint",
+    "start": "web-ext run"
+  },
+  "devDependencies": {
+    "web-ext": "^8.0.0"
+  }
+}

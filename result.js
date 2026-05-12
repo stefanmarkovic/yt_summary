@@ -51,6 +51,12 @@ let chatHistory = [];
 let currentTranscript = "";
 let currentApiKey = "";
 
+function setSafeHTML(element, htmlString) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(htmlString, 'text/html');
+  element.replaceChildren(...doc.body.childNodes);
+}
+
 function updateSummaryUI(result) {
   document.getElementById('video-title').textContent = result.title || 'Video sažetak';
   document.title = `Sažetak: ${result.title || 'Video'}`;
@@ -58,7 +64,7 @@ function updateSummaryUI(result) {
   const wordCount = result.summary.split(/\s+/).length;
   document.getElementById('meta-words').textContent = `~${wordCount} reči`;
 
-  document.getElementById('summary').innerHTML = markdownToHtml(result.summary);
+  setSafeHTML(document.getElementById('summary'), markdownToHtml(result.summary));
 
   // === SponsorBlock detalji ===
   const sponsorContainer = document.getElementById('sponsor-info');
@@ -84,8 +90,8 @@ function updateSummaryUI(result) {
       html += '</div>';
     }
 
-    sponsorContainer.innerHTML = html;
     sponsorContainer.style.display = 'block';
+    setSafeHTML(sponsorContainer, html);
   } else {
     sponsorContainer.style.display = 'none';
   }
@@ -94,7 +100,7 @@ function updateSummaryUI(result) {
   const usageContainer = document.getElementById('usage-info');
   if (result.usage) {
     const u = result.usage;
-    usageContainer.innerHTML = `
+    setSafeHTML(usageContainer, `
       <div class="usage-header">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1010 10A10 10 0 0012 2z"/><path d="M12 6v6l4 2"/></svg>
         <span>${GEMINI_MODEL}</span>
@@ -118,7 +124,7 @@ function updateSummaryUI(result) {
         </div>
       </div>
       <div class="usage-note">Cene: $0.10/1M input · $0.40/1M output</div>
-    `;
+    `);
     usageContainer.style.display = 'block';
   } else {
     usageContainer.style.display = 'none';
@@ -164,7 +170,7 @@ function appendChatMessage(role, text) {
   const container = document.getElementById('chat-messages');
   const msgDiv = document.createElement('div');
   msgDiv.className = `message message-${role}`;
-  msgDiv.innerHTML = markdownToHtml(text);
+  setSafeHTML(msgDiv, markdownToHtml(text));
   container.appendChild(msgDiv);
   container.scrollTop = container.scrollHeight;
 }
@@ -204,7 +210,11 @@ async function init() {
     currentTranscript = sessionData.yt_transcript;
 
     if (!result) {
-      document.getElementById('loading').innerHTML = '<div class="loading-text">Nema podataka za prikaz.</div>';
+      document.getElementById('loading').replaceChildren();
+      const errorMsg = document.createElement('div');
+      errorMsg.className = 'loading-text';
+      errorMsg.textContent = 'Nema podataka za prikaz.';
+      document.getElementById('loading').appendChild(errorMsg);
       return;
     }
 
@@ -232,29 +242,35 @@ async function init() {
       const data = await browser.storage.local.get('yt_summary_result');
       await navigator.clipboard.writeText(data.yt_summary_result.summary);
       this.classList.add('copied');
-      const originalHtml = this.innerHTML;
-      this.innerHTML = this.innerHTML.replace('Kopiraj Markdown', '✓ Kopirano!');
+      const btnText = this.querySelector('.btn-text');
+      const original = btnText.textContent;
+      btnText.textContent = '✓ Kopirano!';
       setTimeout(() => {
         this.classList.remove('copied');
-        this.innerHTML = originalHtml;
+        btnText.textContent = original;
       }, 2000);
     });
 
     document.getElementById('copy-text-btn').addEventListener('click', async function() {
       const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = document.getElementById('summary').innerHTML;
+      setSafeHTML(tempDiv, document.getElementById('summary').innerHTML);
       const plain = tempDiv.textContent.replace(/\n{3,}/g, '\n\n');
       await navigator.clipboard.writeText(plain);
       this.classList.add('copied');
-      const originalHtml = this.innerHTML;
-      this.innerHTML = this.innerHTML.replace('Kopiraj tekst', '✓ Kopirano!');
+      const btnText = this.querySelector('.btn-text');
+      const original = btnText.textContent;
+      btnText.textContent = '✓ Kopirano!';
       setTimeout(() => {
         this.classList.remove('copied');
-        this.innerHTML = originalHtml;
+        btnText.textContent = original;
       }, 2000);
     });
   } catch (e) {
-    document.getElementById('loading').innerHTML = `<div class="loading-text">Greška: ${e.message}</div>`;
+    document.getElementById('loading').replaceChildren();
+    const errorMsg = document.createElement('div');
+    errorMsg.className = 'loading-text';
+    errorMsg.textContent = `Greška: ${e.message}`;
+    document.getElementById('loading').appendChild(errorMsg);
   }
 }
 
