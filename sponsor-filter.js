@@ -24,5 +24,12 @@ function filterSegments(segments, sponsorSegments) {
     if (isSkipped) { savedSeconds += seg.durSec; return false; }
     return true;
   });
-  return { text: filtered.map(s => s.text).join(' '), savedSeconds, categoryStats };
+
+  const textWithTimestamps = filtered.map(s => {
+    const min = Math.floor(s.startSec / 60);
+    const sec = Math.floor(s.startSec % 60).toString().padStart(2, '0');
+    return `[${min}:${sec}] ${s.text}`;
+  }).join(' ');
+
+  return { text: textWithTimestamps, savedSeconds, categoryStats };
 }

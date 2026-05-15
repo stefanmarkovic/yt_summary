@@ -52,11 +52,21 @@
     <div class="content">
       <div class="container">
         <div id="summary" class="summary"></div>
+        <div id="entity-info" class="info-card entity-card" style="display:none; padding:12px; margin-bottom:15px; border-radius:6px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1);">
+          <h4 style="margin:0 0 10px 0; font-size:13px; color:#aaa;">Pomenuti Entiteti:</h4>
+          <div id="entity-tags" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+        </div>
         <div id="sponsor-info" class="info-card sponsor-card"></div>
         <div id="usage-info" class="info-card usage-card"></div>
 
         <div class="chat-section">
-          <h2 class="chat-title">Pitaj AI o videu</h2>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h2 class="chat-title" style="margin: 0;">Pitaj AI o videu</h2>
+            <div style="display: flex; gap: 8px;">
+              <button id="download-transcript-btn" class="secondary" style="font-size: 12px; padding: 6px 12px; border-radius: 4px; background: rgba(255,255,255,0.1); border: none; color: white; cursor: pointer;">📝 Preuzmi transkript</button>
+              <button id="generate-quiz-btn" class="secondary" style="font-size: 12px; padding: 6px 12px; border-radius: 4px; background: rgba(255,255,255,0.1); border: none; color: white; cursor: pointer;">🎲 Generiši kviz</button>
+            </div>
+          </div>
           <div id="chat-messages" class="chat-messages"></div>
           <div class="chat-input-area">
             <textarea id="chat-input" placeholder="Postavi pitanje o videu..." rows="2"></textarea>
