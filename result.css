@@ -138,6 +138,21 @@ h1 {
   font-style: italic;
 }
 
+.timestamp-link {
+  color: #38bdf8;
+  text-decoration: none;
+  font-weight: 600;
+  padding: 0 2px;
+  background: rgba(56, 189, 248, 0.1);
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+.timestamp-link:hover {
+  background: rgba(56, 189, 248, 0.2);
+  color: #7dd3fc;
+  text-decoration: underline;
+}
+
 .summary blockquote {
   border-left: 3px solid #6366f1;
   padding: 0.5rem 1rem;
