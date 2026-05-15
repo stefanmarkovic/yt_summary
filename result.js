@@ -125,12 +125,16 @@ async function regenerateSummary(level) {
 
   const buttons = document.querySelectorAll('.detail-btn');
   buttons.forEach(b => b.disabled = true);
-  document.getElementById('summary').style.opacity = '0.5';
+  const summaryEl = document.getElementById('summary');
+  summaryEl.style.opacity = '0.5';
 
   try {
-    const result = await llmSummarize(currentConfig, currentTranscript, level, "standard");
-
     const storageData = await browser.storage.local.get('yt_summary_result');
+    const chapters = storageData.yt_summary_result?.chapters || [];
+    
+    // Za regeneraciju koristimo istu llmSummarizeLong logiku
+    const result = await llmSummarizeLong(currentConfig, currentTranscript, level, "standard", chapters);
+
     const newResult = {
       ...storageData.yt_summary_result,
       summary: result.text,
@@ -150,7 +154,7 @@ async function regenerateSummary(level) {
     alert("Greška pri regeneraciji: " + e.message);
   } finally {
     buttons.forEach(b => b.disabled = false);
-    document.getElementById('summary').style.opacity = '1';
+    summaryEl.style.opacity = '1';
   }
 }
 

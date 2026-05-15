@@ -31,15 +31,29 @@ async function fetchTranscriptInPageContext(videoId) {
       const textEl = seg.querySelector('.segment-text, yt-formatted-string.segment-text, yt-formatted-string') || seg;
       const timeEl = seg.querySelector('.segment-timestamp, .segment-start-offset');
       const text = (textEl.textContent || '').trim();
-      let startSec = i * 5;
+      let startSec = 0;
       if (timeEl) {
         const parts = timeEl.textContent.trim().replace(/\s/g, '').split(':').map(Number);
         if (parts.length === 2) startSec = parts[0] * 60 + parts[1];
-        if (parts.length === 3) startSec = parts[0] * 3600 + parts[1] * 60 + parts[2];
+        else if (parts.length === 3) startSec = parts[0] * 3600 + parts[1] * 60 + parts[2];
+      } else {
+        // Fallback ako nema tajmstempa
+        startSec = i * 5;
       }
-      // Fiksno trajanje: DOM ne pruža tačan dur; utiče na preciznost SponsorBlock filtriranja
-      if (text) segments.push({ text, startSec, durSec: 5.0 });
+      
+      if (text) {
+        segments.push({ text, startSec, durSec: 5.0 });
+      }
     });
+
+    // Dinamički izračunaj trajanje na osnovu sledećeg segmenta
+    for (let i = 0; i < segments.length - 1; i++) {
+      const diff = segments[i + 1].startSec - segments[i].startSec;
+      if (diff > 0) {
+        segments[i].durSec = diff;
+      }
+    }
+
     return segments;
   }
 
@@ -281,12 +295,33 @@ async function fetchTranscriptInPageContext(videoId) {
     return null;
   }
 
+  function getChapters() {
+    try {
+      const markers = window.ytInitialPlayerResponse?.playerOverlays?.playerOverlayRenderer?.decoratedPlayerBarRenderer?.decoratedPlayerBarRenderer?.playerBar?.multiMarkersPlayerBarRenderer?.markersMap;
+      if (!markers) return [];
+      
+      const macroMarkers = markers.find(m => m.key === 'MARKER_TYPE_HASHTAGS' || m.key === 'AUTO_CHAPTERS' || m.value?.chapters);
+      const chapters = macroMarkers?.value?.chapters || [];
+      
+      return chapters.map(c => ({
+        title: c.chapterRenderer?.title?.simpleText || '',
+        timeSec: parseInt(c.chapterRenderer?.timeRangeStartMillis || '0') / 1000
+      })).filter(c => c.title);
+    } catch (e) {
+      dbg("Chapters err: " + e.message);
+      return [];
+    }
+  }
+
   // ======= Glavni fallback loop =======
   try {
+    const chapters = getChapters();
+    if (chapters.length > 0) dbg(`Pronađeno ${chapters.length} poglavlja`);
+
     for (const strategy of [tryBaseUrl, tryInnerTube, tryDomScraping]) {
       const segments = await strategy();
       if (segments && segments.length > 0) {
-        return { status: 'ok', segments, debugLines: D };
+        return { status: 'ok', segments, chapters, debugLines: D };
       }
     }
     return { status: 'error', error: 'Svi metodi neuspešni.', debugLines: D };

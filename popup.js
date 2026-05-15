@@ -5,7 +5,7 @@ const PLUGIN_VERSION = "4.1";
 const PRESETS = {
   gemini: { url: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent", model: "gemini-3-flash-preview" },
   deepseek: { url: "https://api.deepseek.com/chat/completions", model: "deepseek-chat" },
-  ollama: { url: "http://localhost:11434/v1/chat/completions", model: "llama3" }
+  ollama: { url: "http://localhost:11434/v1/chat/completions", model: "qwen2.5:7b" }
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -18,6 +18,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const apiUrlInput = document.getElementById('api-url-input');
   const apiModelInput = document.getElementById('api-model-input');
   const apiKeyInput = document.getElementById('api-key-input');
+
+  const contextWindowInput = document.getElementById('context-window-input');
+  const temperatureInput = document.getElementById('temperature-input');
+  const topPInput = document.getElementById('top-p-input');
+  const advancedSettingsWrapper = document.getElementById('advanced-settings-wrapper');
 
   const saveKeyBtn = document.getElementById('save-key-btn');
   const cancelBtn = document.getElementById('cancel-btn');
@@ -59,8 +64,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   function updateVisibility() {
     if (providerSelect.value === 'gemini') {
       geminiModelWrapper.classList.remove('hidden');
+      advancedSettingsWrapper.classList.add('hidden');
     } else {
       geminiModelWrapper.classList.add('hidden');
+      advancedSettingsWrapper.classList.remove('hidden');
     }
   }
 
@@ -75,6 +82,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         apiModelInput.value = PRESETS[p].model;
       }
     }
+    
+    // Default values for advanced settings based on provider
+    if (p === 'ollama') {
+      contextWindowInput.value = 32768;
+      temperatureInput.value = 0.7;
+      topPInput.value = 1.0;
+    } else if (p === 'deepseek') {
+      contextWindowInput.value = 65536;
+      temperatureInput.value = 0.7;
+      topPInput.value = 1.0;
+    }
+
     updateVisibility();
   });
 
@@ -104,6 +123,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   providerSelect.value = config.provider || 'gemini';
   apiUrlInput.value = config.url || PRESETS[providerSelect.value]?.url || PRESETS.gemini.url;
   apiKeyInput.value = config.apiKey || '';
+  contextWindowInput.value = config.contextWindow || 32768;
+  temperatureInput.value = config.temperature || 0.7;
+  topPInput.value = config.topP || 1.0;
 
   if (providerSelect.value === 'gemini') {
     const savedModel = config.model || geminiModelSelect.value;
@@ -126,7 +148,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       provider: providerSelect.value,
       url: apiUrlInput.value.trim(),
       model: apiModelInput.value.trim(),
-      apiKey: apiKeyInput.value.trim()
+      apiKey: apiKeyInput.value.trim(),
+      contextWindow: parseInt(contextWindowInput.value) || 32768,
+      temperature: parseFloat(temperatureInput.value) || 0.7,
+      topP: parseFloat(topPInput.value) || 1.0
     };
     if (newConfig.url && newConfig.model) {
       await browser.storage.local.set({ llm_config: newConfig });
@@ -196,17 +221,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       const detail = document.getElementById('detail-level').value;
       const persona = document.getElementById('persona-level').value;
       log(`LLM: provider=${llm_config.provider}, model=${llm_config.model}, detail=${detail}, persona=${persona}`);
+      if (transcript.chapters && transcript.chapters.length > 0) {
+        log(`Poglavlja: ${transcript.chapters.length} pronađeno.`);
+      }
 
-      // Heartbeat timer za debug log
-      let waitSeconds = 0;
-      heartbeatInterval = setInterval(() => {
-        waitSeconds += 5;
-        log(`... čeka se odgovor AI (${waitSeconds}s)`);
-        statusDiv.innerText = `AI razmišlja (${waitSeconds}s)...`;
-      }, 5000);
+      const onProgress = (msg) => {
+        statusDiv.innerText = msg;
+        log(`[PROGRES] ${msg}`);
+      };
 
-      const result = await llmSummarize(llm_config, transcript.text, detail, persona);
-      clearInterval(heartbeatInterval);
+      const result = await llmSummarizeLong(llm_config, transcript.text, detail, persona, transcript.chapters, onProgress);
       log(`Odgovor: ${result.text.length} kar | Tokeni: ${result.usage.promptTokens} in + ${result.usage.outputTokens} out = ${result.usage.totalTokens} total`);
       log(`Cena: ~$${result.usage.estimatedCost}`);
 
@@ -221,6 +245,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         videoUrl: tab.url,
         sponsorSaved: transcript.savedSeconds,
         categoryStats: transcript.categoryStats,
+        chapters: transcript.chapters,
         usage: result.usage,
         timestamp: Date.now()
       };

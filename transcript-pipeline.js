@@ -12,7 +12,7 @@ async function getSponsorSegments(videoId) {
 /**
  * @param {number} tabId - Tab ID za scripting.executeScript
  * @param {string} videoId - YouTube video ID
- * @returns {Promise<{text: string, savedSeconds: number, categoryStats: object, debugLines: string[], segmentCount: number, sponsorCount: number}>}
+ * @returns {Promise<{text: string, savedSeconds: number, categoryStats: object, debugLines: string[], segmentCount: number, sponsorCount: number, chapters: Array}>}
  */
 async function getProcessedTranscript(tabId, videoId) {
   // 1. SponsorBlock — paralelno sa transkriptom
@@ -35,6 +35,8 @@ async function getProcessedTranscript(tabId, videoId) {
 
   const segments = scriptResult.segments;
   if (!segments || segments.length === 0) throw new Error("Nema segmenata u transkriptu.");
+  
+  const chapters = scriptResult.chapters || [];
 
   // 3. SponsorBlock filtriranje
   const categoryStats = {};
@@ -66,6 +68,7 @@ async function getProcessedTranscript(tabId, videoId) {
     categoryStats,
     debugLines,
     segmentCount: segments.length,
-    sponsorCount: sponsorSegments.length
+    sponsorCount: sponsorSegments.length,
+    chapters
   };
 }

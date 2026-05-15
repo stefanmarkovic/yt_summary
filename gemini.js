@@ -29,7 +29,16 @@ const PRICING = {
 function buildGeminiRequest(config, systemInstruction, userMessage, history) {
   const url = config.url.replace('{model}', config.model);
   const contents = [...history, { role: "user", parts: [{ text: userMessage }] }];
-  const body = { contents, systemInstruction: { parts: [{ text: systemInstruction }] } };
+  
+  const body = { 
+    contents, 
+    systemInstruction: { parts: [{ text: systemInstruction }] },
+    generationConfig: {
+      temperature: config.temperature ?? 0.7,
+      topP: config.topP ?? 1.0
+    }
+  };
+  
   const headers = { 'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey };
   return { url, headers, body: JSON.stringify(body) };
 }
@@ -43,7 +52,15 @@ function buildOpenAIRequest(config, systemInstruction, userMessage, history) {
   messages.push({ role: "user", content: userMessage });
   const headers = { 'Content-Type': 'application/json' };
   if (config.apiKey) headers['Authorization'] = `Bearer ${config.apiKey}`;
-  return { url, headers, body: JSON.stringify({ model: config.model, messages }) };
+  
+  const body = { 
+    model: config.model, 
+    messages,
+    temperature: config.temperature ?? 0.7,
+    top_p: config.topP ?? 1.0
+  };
+  
+  return { url, headers, body: JSON.stringify(body) };
 }
 
 function parseGeminiResponse(result, config) {
@@ -97,7 +114,20 @@ function cleanJsonResponse(text) {
 }
 
 function buildSystemInstruction(transcript, taskSpec) {
-  let prompt = `Transkript YouTube videa:\n${transcript}\n\nInstrukcija: ${taskSpec.instruction} Odgovaraj na srpskom jeziku.`;
+  let prompt = `Transkript YouTube videa:\n${transcript}\n\n`;
+  
+  if (taskSpec.chapters && taskSpec.chapters.length > 0) {
+    prompt += `Zvanična poglavlja videa:\n`;
+    taskSpec.chapters.forEach(c => {
+      const min = Math.floor(c.timeSec / 60);
+      const sec = Math.floor(c.timeSec % 60).toString().padStart(2, '0');
+      prompt += `- [${min}:${sec}] ${c.title}\n`;
+    });
+    prompt += `\nInstrukcija: Koristi ova poglavlja da strukturiraš sažetak. ${taskSpec.instruction} Odgovaraj na srpskom jeziku.`;
+  } else {
+    prompt += `Instrukcija: ${taskSpec.instruction} Odgovaraj na srpskom jeziku.`;
+  }
+
   prompt += ` Obavezno zadrži približne vremenske oznake u formatu [MM:SS] iz originalnog transkripta kada referenciraš delove videa.`;
   if (taskSpec.persona && PERSONA_PROMPTS[taskSpec.persona]) {
     prompt += `\n\nTON I STIL: ${PERSONA_PROMPTS[taskSpec.persona]}`;
@@ -107,42 +137,64 @@ function buildSystemInstruction(transcript, taskSpec) {
 
 // === Glavni LLM request ===
 
-async function llmRequest(config, systemInstruction, userMessage, history = []) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
+async function llmRequest(config, systemInstruction, userMessage, history = [], maxRetries = 2) {
+  let attempt = 0;
+  
+  while (attempt <= maxRetries) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
 
-  try {
-    const isGemini = config.provider.startsWith('gemini');
-    const { url, headers, body } = isGemini
-      ? buildGeminiRequest(config, systemInstruction, userMessage, history)
-      : buildOpenAIRequest(config, systemInstruction, userMessage, history);
+    try {
+      const isGemini = config.provider.startsWith('gemini');
+      const { url, headers, body } = isGemini
+        ? buildGeminiRequest(config, systemInstruction, userMessage, history)
+        : buildOpenAIRequest(config, systemInstruction, userMessage, history);
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      body,
-      signal: controller.signal
-    });
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body,
+        signal: controller.signal
+      });
 
-    if (!response.ok) {
-      handleHttpError(response, config.provider);
-      const errText = await response.text().catch(() => '');
-      throw new Error(`${config.provider} API: HTTP ${response.status} — ${errText.substring(0, 200)}`);
+      if (!response.ok) {
+        if (response.status === 503 && attempt < maxRetries) {
+          attempt++;
+          const waitTime = Math.pow(2, attempt) * 1000 + Math.random() * 1000; // Exponential backoff + jitter
+          console.warn(`[LLM] HTTP 503 primljen. Pokušavam ponovo (Pokušaj ${attempt}/${maxRetries}) za ${Math.round(waitTime)}ms...`);
+          await new Promise(r => setTimeout(r, waitTime));
+          continue; // Probaj ponovo
+        }
+        
+        handleHttpError(response, config.provider);
+        const errText = await response.text().catch(() => '');
+        throw new Error(`${config.provider} API: HTTP ${response.status} — ${errText.substring(0, 200)}`);
+      }
+
+      const result = await response.json();
+      return isGemini
+        ? parseGeminiResponse(result, config)
+        : parseOpenAIResponse(result, config);
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const result = await response.json();
-    return isGemini
-      ? parseGeminiResponse(result, config)
-      : parseOpenAIResponse(result, config);
-  } finally {
-    clearTimeout(timeoutId);
   }
 }
 
 // === Duboki task modul ===
 
 async function llmTask(config, transcript, taskSpec) {
-  const sysInst = buildSystemInstruction(transcript, taskSpec);
+  // Trimming logike za lokalne modele
+  let processedTranscript = transcript;
+  if (config.contextWindow) {
+    const maxChars = config.contextWindow * 3.5; // Rezervišemo prostor za prompt i odgovor
+    if (transcript.length > maxChars) {
+      console.warn(`[LLM] Transkript je predugačak (${transcript.length} kar). Skraćujem na ${Math.round(maxChars)} kar.`);
+      processedTranscript = transcript.substring(0, maxChars) + "\n\n[...TRANSKRIPT SKRAĆEN ZBOG OGRANIČENJA KONTEKSTA...]";
+    }
+  }
+
+  const sysInst = buildSystemInstruction(processedTranscript, taskSpec);
   const result = await llmRequest(config, sysInst, taskSpec.userMessage || "Generiši.", taskSpec.history || []);
   await updateGlobalUsage(result.usage);
   if (taskSpec.parseAs === 'json') {
@@ -153,8 +205,75 @@ async function llmTask(config, transcript, taskSpec) {
 
 // === Javne task funkcije ===
 
-function llmSummarize(config, transcript, detailLevel, persona) {
-  return llmTask(config, transcript, { instruction: DETAIL_PROMPTS[detailLevel], persona });
+function llmSummarize(config, transcript, detailLevel, persona, chapters = []) {
+  return llmTask(config, transcript, { instruction: DETAIL_PROMPTS[detailLevel], persona, chapters });
+}
+
+function chunkTranscript(text, maxChars) {
+  const chunks = [];
+  let currentPos = 0;
+  while (currentPos < text.length) {
+    let endPos = currentPos + maxChars;
+    if (endPos < text.length) {
+      // Pokušaj da nađeš kraj rečenice ili pasusa da ne sečeš usred reči
+      const lastDot = text.lastIndexOf('. ', endPos);
+      if (lastDot > currentPos + (maxChars * 0.8)) {
+        endPos = lastDot + 1;
+      }
+    }
+    chunks.push(text.substring(currentPos, endPos).trim());
+    currentPos = endPos;
+  }
+  return chunks;
+}
+
+async function llmSummarizeLong(config, transcript, detailLevel, persona, chapters = [], onProgress) {
+  const maxChars = (config.contextWindow ? config.contextWindow * 3.0 : 15000);
+  const chunks = chunkTranscript(transcript, maxChars);
+  
+  if (chunks.length <= 1) {
+    return llmSummarize(config, transcript, detailLevel, persona, chapters);
+  }
+
+  if (onProgress) onProgress(`Video je dugačak. Delim na ${chunks.length} delova...`);
+
+  // 1. MAP faza: Sažmi svaki chunk
+  const partialSummaries = [];
+  let totalUsage = { promptTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCost: 0 };
+
+  for (let i = 0; i < chunks.length; i++) {
+    if (onProgress) onProgress(`Obrađujem deo ${i + 1} od ${chunks.length}...`);
+    const taskSpec = {
+      instruction: `Ovo je deo ${i + 1} transkripta. Napravi veoma sažet ali informativan rezime ovog dela u buletima.`,
+      persona: "standard"
+    };
+    const res = await llmTask(config, chunks[i], taskSpec);
+    partialSummaries.push(res.text);
+    
+    totalUsage.promptTokens += res.usage.promptTokens;
+    totalUsage.outputTokens += res.usage.outputTokens;
+    totalUsage.totalTokens += res.usage.totalTokens;
+    totalUsage.estimatedCost = (parseFloat(totalUsage.estimatedCost) + parseFloat(res.usage.estimatedCost)).toFixed(6);
+  }
+
+  // 2. REDUCE faza: Finalni sažetak
+  if (onProgress) onProgress("Spajam delove u finalni sažetak...");
+  const combinedText = partialSummaries.join("\n\n--- DEO ---\n\n");
+  const finalTaskSpec = {
+    instruction: `Evo sažetaka različitih delova jednog videa. Na osnovu njih napravi finalni, koherentan i strukturiran sažetak celog videa. ${DETAIL_PROMPTS[detailLevel]}`,
+    persona,
+    chapters // Prosleđujemo poglavlja u finalnu fazu radi strukture
+  };
+  
+  const finalRes = await llmTask(config, combinedText, finalTaskSpec);
+  
+  // Kombinovana potrošnja
+  finalRes.usage.promptTokens += totalUsage.promptTokens;
+  finalRes.usage.outputTokens += totalUsage.outputTokens;
+  finalRes.usage.totalTokens += totalUsage.totalTokens;
+  finalRes.usage.estimatedCost = (parseFloat(finalRes.usage.estimatedCost) + parseFloat(totalUsage.estimatedCost)).toFixed(6);
+
+  return finalRes;
 }
 
 function llmExtractEntities(config, transcript) {
