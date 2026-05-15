@@ -249,7 +249,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Entity Extraction in background
       setTimeout(async () => {
         try {
-          log("Pokrećem Entity Extraction u pozadini...");
+          log("Pokrećem Entity Extraction u pozadini (3s delay)...");
           const entities = await llmExtractEntities(llm_config, text);
           if (entities && entities.length > 0) {
             const data = await browser.storage.local.get('yt_summary_result');

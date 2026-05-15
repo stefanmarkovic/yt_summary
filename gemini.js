@@ -96,9 +96,6 @@ async function llmRequest(config, systemInstruction, userMessage, history = []) 
       const contents = [...history, { role: "user", parts: [{ text: userMessage }] }];
       const body = { contents, systemInstruction: { parts: [{ text: systemInstruction }] } };
       
-      // Omogućavanje pretrage interneta (Google Search Grounding)
-      body.tools = [{ googleSearch: {} }];
-      
       response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey },
