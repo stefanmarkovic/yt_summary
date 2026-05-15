@@ -164,6 +164,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     statusDiv.innerText = "Inicijalizacija...";
     summarizeBtn.disabled = true;
 
+    let heartbeatInterval;
+
     try {
       const tabs = await browser.tabs.query({ active: true, currentWindow: true });
       const tab = tabs[0];
@@ -223,17 +225,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // Heartbeat timer za debug log
       let waitSeconds = 0;
-      const heartbeatInterval = setInterval(() => {
+      heartbeatInterval = setInterval(() => {
         waitSeconds += 5;
         log(`... čeka se odgovor AI (${waitSeconds}s)`);
         statusDiv.innerText = `AI razmišlja (${waitSeconds}s)...`;
       }, 5000);
 
-      try {
-        const result = await llmSummarize(llm_config, text, detail, persona);
-        clearInterval(heartbeatInterval);
-        log(`Odgovor: ${result.text.length} kar | Tokeni: ${result.usage.promptTokens} in + ${result.usage.outputTokens} out = ${result.usage.totalTokens} total`);
-        log(`Cena: ~$${result.usage.estimatedCost}`);
+      const result = await llmSummarize(llm_config, text, detail, persona);
+      clearInterval(heartbeatInterval);
+      log(`Odgovor: ${result.text.length} kar | Tokeni: ${result.usage.promptTokens} in + ${result.usage.outputTokens} out = ${result.usage.totalTokens} total`);
+      log(`Cena: ~$${result.usage.estimatedCost}`);
 
       const videoTitle = tab.title?.replace(' - YouTube', '') || 'Video sažetak';
 
@@ -279,6 +280,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       log(`Stack: ${error.stack?.substring(0, 300) || 'N/A'}`);
       statusDiv.innerText = "Greška: " + error.message;
     } finally {
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
       summarizeBtn.disabled = false;
     }
   }
