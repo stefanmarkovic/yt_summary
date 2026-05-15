@@ -1,3 +1,5 @@
+// result.js — Thin orchestrator: wires modules, manages UI state
+
 const CATEGORY_LABELS = {
   sponsor: { label: 'Sponzor', icon: '💰' },
   selfpromo: { label: 'Samopromocija', icon: '📢' },
@@ -13,52 +15,9 @@ function formatDuration(seconds) {
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
-function markdownToHtml(md) {
-  let html = md;
-  // Sanitizacija: escape HTML pre markdown transformacija
-  html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-  html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-  html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
-  html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n');
-  html = html.replace(/^---$/gm, '<hr>');
-  html = html.replace(/^\d+\. (.+)$/gm, '<OLI>$1</OLI>');
-  html = html.replace(/^[\*\-] (.+)$/gm, '<li>$1</li>');
-  html = html.replace(/((<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
-  html = html.replace(/((<OLI>.*<\/OLI>\n?)+)/g, (match) =>
-    '<ol>' + match.replace(/OLI/g, 'li') + '</ol>');
-  html = html.replace(/\n\n+/g, '\n\n');
-  html = html.split('\n\n').map(block => {
-    block = block.trim();
-    if (!block) return '';
-    if (block.startsWith('<h') || block.startsWith('<ul') || block.startsWith('<ol') ||
-        block.startsWith('<blockquote') || block.startsWith('<hr') || block.startsWith('<li')) {
-      return block;
-    }
-    return `<p>${block.replace(/\n/g, '<br>')}</p>`;
-  }).join('\n');
-
-  // Timestamps [MM:SS] -> clickable links
-  html = html.replace(/\[(\d{1,3}):(\d{2})\]/g, '<a href="#" class="timestamp-link" data-time="$1:$2">[$1:$2]</a>');
-  
-  return html;
-}
-
-let chatHistory = [];
 let currentTranscript = "";
 let currentConfig = null;
 let currentResult = null;
-
-function setSafeHTML(element, htmlString) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(htmlString, 'text/html');
-  element.replaceChildren(...doc.body.childNodes);
-}
 
 function updateSummaryUI(result) {
   currentResult = result;
@@ -151,7 +110,7 @@ function updateSummaryUI(result) {
         </div>
         <div class="usage-item">
           <span class="usage-label">Cena poziva</span>
-          <span class="usage-value usage-cost">~$${u.estimatedCost}</span>
+          <span class="usage-cost">~$${u.estimatedCost}</span>
         </div>
       </div>
     `);
@@ -163,11 +122,11 @@ function updateSummaryUI(result) {
 
 async function regenerateSummary(level) {
   if (!currentTranscript || !currentConfig) return;
-  
+
   const buttons = document.querySelectorAll('.detail-btn');
   buttons.forEach(b => b.disabled = true);
   document.getElementById('summary').style.opacity = '0.5';
-  
+
   try {
     const result = await llmSummarize(currentConfig, currentTranscript, level, "standard");
 
@@ -181,7 +140,7 @@ async function regenerateSummary(level) {
 
     await browser.storage.local.set({ yt_summary_result: newResult });
     updateSummaryUI(newResult);
-    
+
     buttons.forEach(b => {
       b.classList.remove('active');
       if (b.dataset.level === level) b.classList.add('active');
@@ -195,113 +154,22 @@ async function regenerateSummary(level) {
   }
 }
 
-function appendChatMessage(role, text) {
-  const container = document.getElementById('chat-messages');
-  const msgDiv = document.createElement('div');
-  msgDiv.className = `message message-${role}`;
-  setSafeHTML(msgDiv, markdownToHtml(text));
-  container.appendChild(msgDiv);
-  container.scrollTop = container.scrollHeight;
-}
-
-async function sendChatMessage() {
-  const input = document.getElementById('chat-input');
-  const btn = document.getElementById('chat-send-btn');
-  const text = input.value.trim();
-  
-  if (!text || !currentTranscript || !currentConfig) return;
-  
-  input.value = "";
-  btn.disabled = true;
-  appendChatMessage('user', text);
-  
-  try {
-    const result = await llmChat(currentConfig, currentTranscript, chatHistory, text);
-    appendChatMessage('model', result.text);
-    
-    chatHistory.push({ role: "user", parts: [{ text: text }] });
-    chatHistory.push({ role: "model", parts: [{ text: result.text }] });
-    
-  } catch (e) {
-    appendChatMessage('model', "Greška: " + e.message);
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-async function handleGenerateQuiz() {
-  if (!currentTranscript || !currentConfig) return;
-  const btn = document.getElementById('generate-quiz-btn');
-  btn.disabled = true;
-  btn.textContent = "Generisanje...";
-
-  try {
-    const result = await llmQuiz(currentConfig, currentTranscript);
-    let jsonText = result.text.replace(/```json/g, '').replace(/```/g, '').trim();
-    const questions = JSON.parse(jsonText);
-    
-    const container = document.getElementById('chat-messages');
-    const quizDiv = document.createElement('div');
-    quizDiv.className = `message message-model quiz-container`;
-    quizDiv.style.cssText = "background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);";
-    
-    let html = `<h3 style="margin-top:0; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:8px;">Kviz znanja</h3>`;
-    
-    questions.forEach((q, qIndex) => {
-      html += `<div class="quiz-question" style="margin-bottom: 15px;">
-        <p style="font-weight: bold; margin-bottom: 8px;">${qIndex + 1}. ${q.question}</p>`;
-      q.options.forEach((opt, oIndex) => {
-        html += `<label style="display:block; margin-bottom: 4px; font-size: 13px; cursor: pointer;">
-          <input type="radio" name="q${qIndex}" value="${oIndex}"> ${opt}
-        </label>`;
-      });
-      html += `</div>`;
-    });
-    
-    html += `<button id="submit-quiz-btn" class="secondary" style="margin-top: 10px;">Proveri odgovore</button>`;
-    
-    setSafeHTML(quizDiv, html);
-    container.appendChild(quizDiv);
-    container.scrollTop = container.scrollHeight;
-
-    // Check answers listener
-    quizDiv.querySelector('#submit-quiz-btn').addEventListener('click', (e) => {
-      let score = 0;
-      questions.forEach((q, qIndex) => {
-        const selected = quizDiv.querySelector(`input[name="q${qIndex}"]:checked`);
-        const qDiv = quizDiv.querySelectorAll('.quiz-question')[qIndex];
-        
-        if (selected) {
-          const sIndex = parseInt(selected.value);
-          if (sIndex === q.answerIndex) {
-            score++;
-            selected.parentElement.style.color = "#4ade80"; // green
-          } else {
-            selected.parentElement.style.color = "#f87171"; // red
-            // Highlight correct one
-            qDiv.querySelectorAll('label')[q.answerIndex].style.color = "#4ade80";
-          }
-        } else {
-          qDiv.querySelectorAll('label')[q.answerIndex].style.color = "#4ade80";
-        }
-      });
-      e.target.textContent = `Rezultat: ${score}/${questions.length}`;
-      e.target.disabled = true;
-    });
-
-  } catch (e) {
-    appendChatMessage('model', "Greška pri generisanju kviza: " + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "🎲 Generiši kviz";
-  }
+function handleDownloadTranscript() {
+  if (!currentTranscript) return;
+  const blob = new Blob([currentTranscript], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `transcript-${currentResult?.videoId || 'video'}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 async function init() {
   try {
     const localData = await browser.storage.local.get(['yt_summary_result', 'llm_config']);
     const sessionData = await browser.storage.session.get('yt_transcript');
-    
+
     const result = localData.yt_summary_result;
     currentConfig = localData.llm_config;
     currentTranscript = sessionData.yt_transcript;
@@ -320,21 +188,24 @@ async function init() {
     document.getElementById('loading').style.display = 'none';
     document.getElementById('page').style.display = 'block';
 
-    // Event Listeners for detail buttons
+    // Detail buttons
     document.querySelectorAll('.detail-btn').forEach(btn => {
       btn.addEventListener('click', () => regenerateSummary(btn.dataset.level));
     });
 
-    // Chat Listeners
-    document.getElementById('chat-send-btn').addEventListener('click', sendChatMessage);
-    document.getElementById('chat-input').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendChatMessage();
-      }
+    // Chat — delegated to chat.js (owns chatHistory internally)
+    const chatMessages = document.getElementById('chat-messages');
+    initChat(currentConfig, currentTranscript, chatMessages,
+      document.getElementById('chat-input'),
+      document.getElementById('chat-send-btn'));
+
+    // Quiz — delegated to quiz.js
+    document.getElementById('generate-quiz-btn').addEventListener('click', () => {
+      handleGenerateQuiz(currentConfig, currentTranscript, chatMessages,
+        document.getElementById('generate-quiz-btn'));
     });
 
-    document.getElementById('generate-quiz-btn').addEventListener('click', handleGenerateQuiz);
+    // Download transcript
     document.getElementById('download-transcript-btn').addEventListener('click', handleDownloadTranscript);
 
     // Copy buttons
@@ -366,7 +237,24 @@ async function init() {
       }, 2000);
     });
 
-    // Handle delayed Entity Extraction update (since it happens in background)
+    // Entity extraction — runs in result page lifecycle (no race condition)
+    if (!result.entities && currentTranscript && currentConfig) {
+      try {
+        const entities = await llmExtractEntities(currentConfig, currentTranscript);
+        if (entities && entities.length > 0) {
+          const data = await browser.storage.local.get('yt_summary_result');
+          if (data.yt_summary_result) {
+            data.yt_summary_result.entities = entities;
+            await browser.storage.local.set({ yt_summary_result: data.yt_summary_result });
+            updateSummaryUI(data.yt_summary_result);
+          }
+        }
+      } catch (err) {
+        console.error("Entity extraction failed:", err.message);
+      }
+    }
+
+    // Handle external storage updates (e.g. from another tab)
     browser.storage.onChanged.addListener((changes, area) => {
       if (area === 'local' && changes.yt_summary_result) {
         const newVal = changes.yt_summary_result.newValue;

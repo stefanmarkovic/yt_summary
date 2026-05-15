@@ -24,21 +24,23 @@ Evo potpunog pregleda fajlova i njihovih funkcija:
 
 ```text
 yt_summary/
-├── manifest.json          # MV3 konfiguracija ekstenzije i permisije
-├── popup.html             # HTML struktura i UI popup prozora
-├── popup.css              # Stilovi vezani direktno za popup meni
-├── popup.js               # Osluškivači događaja (DOM) i glavni "orchestrator" aplikacije
-├── gemini.js              # Sve HTTP POST interakcije, timeout i prompt rukovanje za Gemini API
-├── transcript-fetcher.js  # 3 nivoa dohvaćanja transkripta izvršavana unutar "MAIN" world-a
-├── transcript-parser.js   # Konvertovanje XML YouTube transkripata u JavaScript objekte
-├── sponsor-filter.js      # API zahtevi i matematički overlap za SponsorBlock vremenske intervale
-├── result.html            # Struktura punog novog taba u kojem se prikazuju rezultati
-├── result.css             # UI/UX stilovi za glavni rezultat, tabele i chat
-├── result.js              # Parsiranje i renderovanje Markdown-a u HTML, chat i regeneracija
-├── DOCUMENTATION.md       # Razvojna i detaljna tehnička specifikacija arhitekture projekta
-├── .gitattributes         # Kontrola text LF konfiguracija
-├── .gitignore             # GIT ignore fajl
-└── icons/                 # Direktorijum sa grafičkim ikonicama
+├── manifest.json            # MV3 konfiguracija ekstenzije i permisije
+├── popup.html               # HTML struktura i UI popup prozora
+├── popup.css                # Stilovi vezani direktno za popup meni
+├── popup.js                 # Osluškivači događaja (DOM) i glavni "orchestrator" aplikacije
+├── gemini.js                # LLM API: llmTask modul, provider seam-ovi
+├── transcript-fetcher.js    # MAIN world: dohvatanje transkripta (3 strategije)
+├── transcript-pipeline.js   # Konsolidovani pipeline: fetch + SponsorBlock + filtriranje
+├── markdown-renderer.js     # Pure function: markdownToHtml + setSafeHTML
+├── chat.js                  # Chat modul
+├── quiz.js                  # Quiz modul
+├── result.html              # Struktura punog novog taba u kojem se prikazuju rezultati
+├── result.css               # UI/UX stilovi za glavni rezultat, tabele i chat
+├── result.js                # Orchestrator rezultata: UI, regeneracija, entity extraction
+├── DOCUMENTATION.md         # Razvojna i detaljna tehnička specifikacija arhitekture projekta
+├── .gitattributes           # Kontrola text LF konfiguracija
+├── .gitignore               # GIT ignore fajl
+└── icons/                   # Direktorijum sa grafičkim ikonicama
 ```
 
 ## Instalacija

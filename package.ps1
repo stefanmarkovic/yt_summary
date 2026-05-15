@@ -8,8 +8,10 @@ $files = @(
     "result.css",
     "gemini.js",
     "transcript-fetcher.js",
-    "transcript-parser.js",
-    "sponsor-filter.js",
+    "transcript-pipeline.js",
+    "markdown-renderer.js",
+    "chat.js",
+    "quiz.js",
     "icons"
 )
 

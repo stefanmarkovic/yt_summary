@@ -1,6 +1,6 @@
-// YT Summary AI - popup.js v3.5
+// YT Summary AI - popup.js v4.0
 
-const PLUGIN_VERSION = "3.5";
+const PLUGIN_VERSION = "4.1";
 
 const PRESETS = {
   gemini: { url: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent", model: "gemini-3-flash-preview" },
@@ -175,46 +175,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!videoId) throw new Error("Niste na YouTube videu.");
       log(`Video ID: ${videoId}`);
 
-      statusDiv.innerText = "SponsorBlock...";
-      const sponsorSegments = await getSponsorSegments(videoId);
-      log(`SponsorBlock: ${sponsorSegments.length} segmenata.`);
+      // Transcript pipeline: dohvatanje, parsiranje, SponsorBlock filtriranje
+      statusDiv.innerText = "Dohvatanje i obrada transkripta...";
+      const transcript = await getProcessedTranscript(tab.id, videoId);
 
-      statusDiv.innerText = "Dohvatanje transkripta...";
-      log("Pokrećem scripting.executeScript u MAIN world-u...");
-
-      const results = await browser.scripting.executeScript({
-        target: { tabId: tab.id },
-        world: "MAIN",
-        func: fetchTranscriptInPageContext,
-        args: [videoId]
-      });
-
-      const scriptResult = results[0]?.result;
-      if (!scriptResult) throw new Error("executeScript nije vratio rezultat.");
-
-      if (scriptResult.debugLines) {
-        for (const line of scriptResult.debugLines) {
-          log(`  [PAGE] ${line}`);
-        }
+      for (const line of transcript.debugLines) {
+        log(`  [PAGE] ${line}`);
       }
-
-      if (scriptResult.status === 'error') throw new Error(scriptResult.error);
-
-      const transcriptText = scriptResult.transcriptXml;
-      log(`Transkript: ${transcriptText.length} karaktera`);
-
-      statusDiv.innerText = "Parsiranje...";
-      const segments = parseXmlTranscript(transcriptText);
-      log(`Parsirano: ${segments.length} segmenata.`);
-      if (segments.length === 0) throw new Error("Nema segmenata u transkriptu.");
-
-      statusDiv.innerText = "Filtriranje...";
-      const { text, savedSeconds, categoryStats } = filterSegments(segments, sponsorSegments);
-      log(`Tekst: ${text.length} kar (~${Math.round(text.length / 4)} tokena). Sponsor: ${Math.round(savedSeconds)}s.`);
-      if (Object.keys(categoryStats).length > 0) {
-        log(`Kategorije: ${Object.entries(categoryStats).map(([k, v]) => `${k}=${Math.round(v)}s`).join(', ')}`);
+      log(`Transkript: ${transcript.segmentCount} segmenata. SponsorBlock: ${transcript.sponsorCount} (${Math.round(transcript.savedSeconds)}s filtrirano).`);
+      if (Object.keys(transcript.categoryStats).length > 0) {
+        log(`Kategorije: ${Object.entries(transcript.categoryStats).map(([k, v]) => `${k}=${Math.round(v)}s`).join(', ')}`);
       }
+      log(`Tekst: ${transcript.text.length} kar (~${Math.round(transcript.text.length / 4)} tokena).`);
 
+      // LLM sumarizacija
       statusDiv.innerText = "AI razmišlja...";
       const { llm_config } = await browser.storage.local.get('llm_config');
       if (!llm_config) throw new Error("LLM nije konfigurisan.");
@@ -231,22 +205,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         statusDiv.innerText = `AI razmišlja (${waitSeconds}s)...`;
       }, 5000);
 
-      const result = await llmSummarize(llm_config, text, detail, persona);
+      const result = await llmSummarize(llm_config, transcript.text, detail, persona);
       clearInterval(heartbeatInterval);
       log(`Odgovor: ${result.text.length} kar | Tokeni: ${result.usage.promptTokens} in + ${result.usage.outputTokens} out = ${result.usage.totalTokens} total`);
       log(`Cena: ~$${result.usage.estimatedCost}`);
 
       const videoTitle = tab.title?.replace(' - YouTube', '') || 'Video sažetak';
 
-      await browser.storage.session.set({ yt_transcript: text });
+      await browser.storage.session.set({ yt_transcript: transcript.text });
 
       const finalResult = {
         summary: result.text,
         title: videoTitle,
         videoId,
         videoUrl: tab.url,
-        sponsorSaved: savedSeconds,
-        categoryStats,
+        sponsorSaved: transcript.savedSeconds,
+        categoryStats: transcript.categoryStats,
         usage: result.usage,
         timestamp: Date.now()
       };
@@ -256,24 +230,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       statusDiv.innerText = "Gotovo! Sažetak otvoren u novom tabu.";
       log("=== Završeno — otvoren novi tab ===");
-
-      // Entity Extraction in background
-      setTimeout(async () => {
-        try {
-          log("Pokrećem Entity Extraction u pozadini (3s delay)...");
-          const entities = await llmExtractEntities(llm_config, text);
-          if (entities && entities.length > 0) {
-            const data = await browser.storage.local.get('yt_summary_result');
-            if (data.yt_summary_result) {
-              data.yt_summary_result.entities = entities;
-              await browser.storage.local.set({ yt_summary_result: data.yt_summary_result });
-              log(`Pronađeno ${entities.length} entiteta. Sačuvano.`);
-            }
-          }
-        } catch (err) {
-          log("Greška pri ekstrakciji entiteta: " + err.message);
-        }
-      }, 1000);
 
     } catch (error) {
       log(`GREŠKA: ${error.message}`);

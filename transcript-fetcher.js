@@ -1,19 +1,28 @@
 // Ova funkcija se izvršava u MAIN world-u (YouTube page kontekst).
 // Ima pristup: cookie-jima, ytInitialPlayerResponse, ytInitialData, ytcfg
-// Koristi se iz popup.js via scripting.executeScript({func: fetchTranscriptInPageContext})
+// Koristi se iz transcript-pipeline.js via scripting.executeScript({func: fetchTranscriptInPageContext})
+// Vraća: {status, segments: [{text, startSec, durSec}], debugLines}
 
 async function fetchTranscriptInPageContext(videoId) {
   const D = [];
   function dbg(msg) { D.push(msg); }
 
-  function makeXml(segments) {
-    let xml = '<?xml version="1.0" encoding="utf-8" ?><transcript>';
-    for (const seg of segments) {
-      const esc = seg.text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      xml += `<text start="${seg.start}" dur="${seg.dur}">${esc}</text>`;
+  function parseXmlToSegments(xmlText) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xmlText, 'text/xml');
+    const segments = [];
+    for (const el of doc.querySelectorAll('text')) {
+      if (!el.textContent) continue;
+      let text = el.textContent;
+      let prevText;
+      do { prevText = text; text = text.replace(/<[^>]*>/g, ''); } while (text !== prevText);
+      segments.push({
+        text,
+        startSec: parseFloat(el.getAttribute('start') || '0'),
+        durSec: parseFloat(el.getAttribute('dur') || '0')
+      });
     }
-    xml += '</transcript>';
-    return xml;
+    return segments;
   }
 
   function readTranscriptFromDOM(segs) {
@@ -29,9 +38,9 @@ async function fetchTranscriptInPageContext(videoId) {
         if (parts.length === 3) startSec = parts[0] * 3600 + parts[1] * 60 + parts[2];
       }
       // Fiksno trajanje: DOM ne pruža tačan dur; utiče na preciznost SponsorBlock filtriranja
-      if (text) segments.push({ text, start: startSec.toFixed(3), dur: '5.000' });
+      if (text) segments.push({ text, startSec, durSec: 5.0 });
     });
-    return { status: 'ok', transcriptXml: makeXml(segments), debugLines: D };
+    return segments;
   }
 
   function waitForEl(sel, timeout = 5000) {
@@ -47,8 +56,8 @@ async function fetchTranscriptInPageContext(videoId) {
     });
   }
 
-  try {
-    // ======= METOD 1: baseUrl iz ytInitialPlayerResponse =======
+  // ======= Strategija 1: baseUrl iz ytInitialPlayerResponse =======
+  async function tryBaseUrl() {
     dbg("M1: ytInitialPlayerResponse baseUrl");
     let captionTracks = null;
     if (window.ytInitialPlayerResponse) {
@@ -64,90 +73,100 @@ async function fetchTranscriptInPageContext(videoId) {
       }
     }
 
-    if (captionTracks) {
-      const track = captionTracks.find(t => t.languageCode === 'sr') ||
-                    captionTracks.find(t => t.languageCode === 'en' && t.kind !== 'asr') ||
-                    captionTracks.find(t => t.languageCode === 'en') ||
-                    captionTracks[0];
-      dbg(`M1: track=${track.languageCode}(${track.kind || 'manual'})`);
+    if (!captionTracks) return null;
 
-      const url = track.baseUrl.replace(/&fmt=srv3/g, '').replace(/&fmt=json3/g, '');
-      try {
-        const resp = await fetch(url, { credentials: 'include' });
-        const txt = await resp.text();
-        dbg(`M1: HTTP ${resp.status} CT=${resp.headers.get('content-type')||'?'} len=${txt.length}`);
-        if (resp.ok && txt.length > 50) {
-          return { status: 'ok', transcriptXml: txt, debugLines: D };
-        }
-      } catch (e) { dbg(`M1 err: ${e.message}`); }
-    }
+    const track = captionTracks.find(t => t.languageCode === 'sr') ||
+                  captionTracks.find(t => t.languageCode === 'en' && t.kind !== 'asr') ||
+                  captionTracks.find(t => t.languageCode === 'en') ||
+                  captionTracks[0];
+    dbg(`M1: track=${track.languageCode}(${track.kind || 'manual'})`);
 
-    // ======= METOD 2: /get_transcript iz MAIN world-a =======
-    dbg("M2: /get_transcript iz MAIN world");
+    const url = track.baseUrl.replace(/&fmt=srv3/g, '').replace(/&fmt=json3/g, '');
     try {
-      let transcriptParams = null;
-      if (window.ytInitialData?.engagementPanels) {
-        for (const panel of window.ytInitialData.engagementPanels) {
-          const r = panel.engagementPanelSectionListRenderer;
-          if (r?.panelIdentifier === 'engagement-panel-searchable-transcript') {
-            const endpoint = r.content?.continuationItemRenderer?.continuationEndpoint?.getTranscriptEndpoint;
-            if (endpoint?.params) {
-              transcriptParams = endpoint.params;
-              dbg(`M2: params pronađeni (${transcriptParams.substring(0, 30)}...)`);
-            }
-            break;
+      const resp = await fetch(url, { credentials: 'include' });
+      const txt = await resp.text();
+      dbg(`M1: HTTP ${resp.status} CT=${resp.headers.get('content-type')||'?'} len=${txt.length}`);
+      if (resp.ok && txt.length > 50) {
+        const segments = parseXmlToSegments(txt);
+        dbg(`M1: ${segments.length} segmenata parsirano`);
+        if (segments.length > 0) return segments;
+      }
+    } catch (e) { dbg(`M1 err: ${e.message}`); }
+    return null;
+  }
+
+  // ======= Strategija 2: /get_transcript iz MAIN world-a =======
+  async function tryInnerTube() {
+    dbg("M2: /get_transcript iz MAIN world");
+    let transcriptParams = null;
+    if (window.ytInitialData?.engagementPanels) {
+      for (const panel of window.ytInitialData.engagementPanels) {
+        const r = panel.engagementPanelSectionListRenderer;
+        if (r?.panelIdentifier === 'engagement-panel-searchable-transcript') {
+          const endpoint = r.content?.continuationItemRenderer?.continuationEndpoint?.getTranscriptEndpoint;
+          if (endpoint?.params) {
+            transcriptParams = endpoint.params;
+            dbg(`M2: params pronađeni (${transcriptParams.substring(0, 30)}...)`);
           }
+          break;
         }
       }
+    }
 
-      if (transcriptParams) {
-        const apiKey = window.ytcfg?.get?.('INNERTUBE_API_KEY') || 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
-        const ctx = window.ytcfg?.get?.('INNERTUBE_CONTEXT') || { client: { clientName: "WEB", clientVersion: "2.20240101" } };
+    if (!transcriptParams) {
+      dbg("M2: params nisu pronađeni u ytInitialData");
+      return null;
+    }
 
-        const resp = await fetch(`/youtubei/v1/get_transcript?key=${apiKey}`, {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ context: ctx, params: transcriptParams })
-        });
-        dbg(`M2: HTTP ${resp.status}`);
+    const apiKey = window.ytcfg?.get?.('INNERTUBE_API_KEY') || 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+    const ctx = window.ytcfg?.get?.('INNERTUBE_CONTEXT') || { client: { clientName: "WEB", clientVersion: "2.20240101" } };
 
-        if (resp.ok) {
-          const data = await resp.json();
-          const segments = [];
-          for (const action of (data.actions || [])) {
-            const panel = action.updateEngagementPanelAction?.content?.transcriptRenderer
-                       || action.updateEngagementPanelAction?.content;
-            const body = panel?.body?.transcriptBodyRenderer
-                      || panel?.transcriptRenderer?.body?.transcriptBodyRenderer;
-            if (body?.initialSegments) {
-              for (const seg of body.initialSegments) {
-                const sr = seg.transcriptSegmentRenderer;
-                if (sr) {
-                  const text = (sr.snippet?.runs || []).map(r => r.text).join('');
-                  const startMs = parseInt(sr.startMs || '0', 10);
-                  const endMs = parseInt(sr.endMs || '0', 10);
-                  if (text.trim()) {
-                    segments.push({ text, start: (startMs / 1000).toFixed(3), dur: ((endMs - startMs) / 1000).toFixed(3) });
-                  }
-                }
+    try {
+      const resp = await fetch(`/youtubei/v1/get_transcript?key=${apiKey}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ context: ctx, params: transcriptParams })
+      });
+      dbg(`M2: HTTP ${resp.status}`);
+
+      if (!resp.ok) {
+        const errTxt = await resp.text();
+        dbg(`M2: err: ${errTxt.substring(0, 150)}`);
+        return null;
+      }
+
+      const data = await resp.json();
+      const segments = [];
+      for (const action of (data.actions || [])) {
+        const panel = action.updateEngagementPanelAction?.content?.transcriptRenderer
+                   || action.updateEngagementPanelAction?.content;
+        const body = panel?.body?.transcriptBodyRenderer
+                  || panel?.transcriptRenderer?.body?.transcriptBodyRenderer;
+        if (body?.initialSegments) {
+          for (const seg of body.initialSegments) {
+            const sr = seg.transcriptSegmentRenderer;
+            if (sr) {
+              const text = (sr.snippet?.runs || []).map(r => r.text).join('');
+              const startMs = parseInt(sr.startMs || '0', 10);
+              const endMs = parseInt(sr.endMs || '0', 10);
+              if (text.trim()) {
+                segments.push({ text, startSec: startMs / 1000, durSec: (endMs - startMs) / 1000 });
               }
             }
           }
-          dbg(`M2: ${segments.length} segmenata`);
-          if (segments.length > 0) {
-            return { status: 'ok', transcriptXml: makeXml(segments), debugLines: D };
-          }
-        } else {
-          const errTxt = await resp.text();
-          dbg(`M2: err: ${errTxt.substring(0, 150)}`);
         }
-      } else {
-        dbg("M2: params nisu pronađeni u ytInitialData");
       }
-    } catch (e) { dbg(`M2 err: ${e.message}`); }
+      dbg(`M2: ${segments.length} segmenata`);
+      return segments.length > 0 ? segments : null;
+    } catch (e) {
+      dbg(`M2 err: ${e.message}`);
+      return null;
+    }
+  }
 
-    // ======= METOD 3: DOM Scraping =======
+  // ======= Strategija 3: DOM Scraping =======
+  async function tryDomScraping() {
     dbg("M3: DOM scraping");
 
     // Strategija A: Transcript dugme u opisu videa
@@ -259,8 +278,18 @@ async function fetchTranscriptInPageContext(videoId) {
       dbg(`M3-C: ${panels.length} panela, nijedan sa transkriptom`);
     } catch (e) { dbg(`M3-C err: ${e.message}`); }
 
-    return { status: 'error', error: 'Svi metodi neuspešni.', debugLines: D };
+    return null;
+  }
 
+  // ======= Glavni fallback loop =======
+  try {
+    for (const strategy of [tryBaseUrl, tryInnerTube, tryDomScraping]) {
+      const segments = await strategy();
+      if (segments && segments.length > 0) {
+        return { status: 'ok', segments, debugLines: D };
+      }
+    }
+    return { status: 'error', error: 'Svi metodi neuspešni.', debugLines: D };
   } catch (e) {
     return { status: 'error', error: e.message, debugLines: D };
   }
