@@ -221,9 +221,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       const persona = document.getElementById('persona-level').value;
       log(`LLM: provider=${llm_config.provider}, model=${llm_config.model}, detail=${detail}, persona=${persona}`);
 
-      const result = await llmSummarize(llm_config, text, detail, persona);
-      log(`Odgovor: ${result.text.length} kar | Tokeni: ${result.usage.promptTokens} in + ${result.usage.outputTokens} out = ${result.usage.totalTokens} total`);
-      log(`Cena: ~$${result.usage.estimatedCost}`);
+      // Heartbeat timer za debug log
+      let waitSeconds = 0;
+      const heartbeatInterval = setInterval(() => {
+        waitSeconds += 5;
+        log(`... čeka se odgovor AI (${waitSeconds}s)`);
+        statusDiv.innerText = `AI razmišlja (${waitSeconds}s)...`;
+      }, 5000);
+
+      try {
+        const result = await llmSummarize(llm_config, text, detail, persona);
+        clearInterval(heartbeatInterval);
+        log(`Odgovor: ${result.text.length} kar | Tokeni: ${result.usage.promptTokens} in + ${result.usage.outputTokens} out = ${result.usage.totalTokens} total`);
+        log(`Cena: ~$${result.usage.estimatedCost}`);
 
       const videoTitle = tab.title?.replace(' - YouTube', '') || 'Video sažetak';
 
