@@ -282,10 +282,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Playlist detection
   browser.tabs.query({ active: true, currentWindow: true }).then(tabs => {
     const tab = tabs[0];
-    if (tab && tab.url && tab.url.includes('youtube.com')) {
+    if (tab && tab.url) {
       try {
         const urlObj = new URL(tab.url);
-        if (urlObj.searchParams.has('list')) {
+        if ((urlObj.hostname === 'youtube.com' || urlObj.hostname.endsWith('.youtube.com')) && urlObj.searchParams.has('list')) {
           document.getElementById('playlist-summarize-btn').classList.remove('hidden');
         }
       } catch(e) { console.warn("Playlist URL parse error:", e.message); }
@@ -320,7 +320,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Try url params
             const v = new URLSearchParams(window.location.search).get('v');
             if (v && ids.size === 0) ids.add(v); // At least the current one
-          } catch (e) {}
+          } catch (e) { console.warn("Error scraping playlist IDs:", e); }
           return Array.from(ids);
         }
       });
