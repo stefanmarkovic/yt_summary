@@ -8,7 +8,7 @@ Firefox (Manifest V3) ekstenzija koja:
 3. Šalje filtrirani tekst LLM-u (Gemini, DeepSeek, Ollama) za generisanje sažetka na srpskom jeziku
 4. Prikazuje sažetak u novom tabu sa chat funkcionalnostima
 
-**Verzija:** 4.1
+**Verzija:** 4.3
 **Podrazumevani model:** `gemini-3-flash-preview`
 
 ---
@@ -21,15 +21,17 @@ yt_summary/
 ├── popup.html               # Popup UI: API key setup, summarize dugme, debug log
 ├── popup.css                # Stilovi popup-a
 ├── popup.js                 # Thin orchestrator: startAnalysis pipeline
-├── gemini.js                # LLM API: llmTask duboki modul, provider seam-ovi
+├── prompts.js               # Prompt construction: DETAIL/PERSONA_PROMPTS, resolvePersona, buildSystemInstruction
+├── gemini.js                # LLM transport: provider adapters, retry, usage tracking
 ├── transcript-fetcher.js    # MAIN world: dohvatanje transkripta (3 strategije)
 ├── transcript-pipeline.js   # Konsolidovani pipeline: fetch + SponsorBlock + filtriranje
 ├── markdown-renderer.js     # Pure function: markdownToHtml + setSafeHTML
+├── summary-renderer.js      # Reusable summary card rendering (TL;DR, entities, SponsorBlock, usage)
 ├── chat.js                  # Chat modul: owns chatHistory internally
 ├── quiz.js                  # Quiz modul: generisanje, renderovanje, provera
 ├── result.html              # Stranica rezultata
 ├── result.css               # Stilovi stranice rezultata
-├── result.js                # Orchestrator rezultata: UI, regeneracija, entity extraction
+├── result.js                # Orchestrator rezultata: UI lifecycle, regeneracija, entity extraction
 ├── icons/
 │   └── icon-48.png
 └── DOCUMENTATION.md         # Ovaj fajl
@@ -93,19 +95,42 @@ getProcessedTranscript(tabId, videoId)
 
 Apsorbuje logiku bivših `transcript-parser.js` i `sponsor-filter.js`. XML round-trip je eliminisan — fetcher vraća segments[] direktno.
 
-### gemini.js
+### prompts.js
 
-Duboki `llmTask(config, transcript, taskSpec)` modul sa internim provider seam-ovima:
+Pure functions za konstrukciju prompta. Bez I/O zavisnosti.
 
 | Funkcija | Opis |
 |---|---|
-| `llmTask(config, transcript, taskSpec)` | Centralni task handler: prompt construction, request, usage tracking, JSON cleanup |
+| `buildSystemInstruction(transcript, taskSpec)` | Gradi system prompt sa transkriptom, poglavljima, instrukcijom, personom i jezikom |
+| `resolvePersona(personaValue, customPrompts)` | Razrešava persona vrednost: standardne ključeve prosleđuje dalje, `custom_N` konvertuje u tekst šablona |
+
+Konstante: `DETAIL_PROMPTS`, `PERSONA_PROMPTS`.
+
+### gemini.js
+
+LLM transport modul sa internim provider seam-ovima:
+
+| Funkcija | Opis |
+|---|---|
+| `llmTask(config, transcript, taskSpec)` | Centralni task handler: trimming, request, usage tracking, JSON cleanup |
 | `llmSummarize(config, transcript, level, persona)` | Sumarizacija transkripta |
+| `llmSummarizeLong(config, transcript, ...)` | Map-reduce sumarizacija za duge transkripte |
 | `llmExtractEntities(config, transcript)` | Ekstrakcija entiteta (JSON) |
 | `llmQuiz(config, transcript)` | Generisanje kviza (JSON) |
 | `llmChat(config, transcript, history, msg)` | Chat sa kontekstom transkripta |
 
 Interni provider seam-ovi: `buildGeminiRequest`, `buildOpenAIRequest`, `parseGeminiResponse`, `parseOpenAIResponse`.
+
+### summary-renderer.js
+
+Reusable modul za renderovanje summary kartica. Koristi se u `result.js` i `playlist.js`.
+
+| Funkcija | Opis |
+|---|---|
+| `renderSummaryCard(container, result, config)` | Renderuje kompletnu summary karticu: TL;DR, summary body, entiteti, SponsorBlock, usage |
+| `formatDuration(seconds)` | Formatira sekunde u `Xm Ys` format |
+
+Konstante: `CATEGORY_LABELS`.
 
 ### markdown-renderer.js
 

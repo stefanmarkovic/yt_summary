@@ -1,18 +1,27 @@
 // result.js — Thin orchestrator: wires modules, manages UI state
+// Rendering delegated to summary-renderer.js
 
-const CATEGORY_LABELS = {
-  sponsor: { label: 'Sponzor', icon: '💰' },
-  selfpromo: { label: 'Samopromocija', icon: '📢' },
-  interaction: { label: 'Interakcija', icon: '👆' },
-  intro: { label: 'Intro', icon: '🎬' },
-  outro: { label: 'Outro', icon: '🔚' },
-  unknown: { label: 'Ostalo', icon: '⏭️' }
-};
+function downloadAsFile(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
-function formatDuration(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+function copyWithFeedback(button, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    button.classList.add('copied');
+    const btnText = button.querySelector('.btn-text');
+    const original = btnText.textContent;
+    btnText.textContent = '\u2713 Copied!';
+    setTimeout(() => {
+      button.classList.remove('copied');
+      btnText.textContent = original;
+    }, 2000);
+  });
 }
 
 let currentTranscript = "";
@@ -21,116 +30,28 @@ let currentResult = null;
 
 function updateSummaryUI(result) {
   currentResult = result;
-  document.getElementById('video-title').textContent = result.title || 'Video sažetak';
-  document.title = `Sažetak: ${result.title || 'Video'}`;
+  document.getElementById('video-title').textContent = result.title || 'Video sa\u017eetak';
+  document.title = `Sa\u017eetak: ${result.title || 'Video'}`;
   document.getElementById('meta-date').textContent = new Date(result.timestamp).toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'long', year: 'numeric' });
-  
-  let summaryText = result.summary;
-  const tldrMatch = summaryText.match(/TL;DR:\s*(.*?)(\n|$)/i);
-  if (tldrMatch) {
-    const tldr = tldrMatch[1];
-    document.getElementById('tldr-text').textContent = tldr;
+
+  // Delegate rendering to summary-renderer.js
+  const summaryContainer = document.getElementById('summary');
+  const renderResult = renderSummaryCard(summaryContainer, result, currentConfig);
+
+  document.getElementById('meta-words').textContent = `~${renderResult.wordCount} words (${renderResult.readTime} min read)`;
+
+  // TL;DR in dedicated page-level container
+  if (renderResult.tldr) {
+    document.getElementById('tldr-text').textContent = renderResult.tldr;
     document.getElementById('tldr-container').style.display = 'block';
-    summaryText = summaryText.replace(tldrMatch[0], '').trim();
   } else {
     document.getElementById('tldr-container').style.display = 'none';
   }
 
-  const wordCount = summaryText.split(/\s+/).length;
-  const readTime = Math.ceil(wordCount / 200);
-  document.getElementById('meta-words').textContent = `~${wordCount} words (${readTime} min read)`;
-
-  setSafeHTML(document.getElementById('summary'), markdownToHtml(summaryText));
-
-  // Add click listeners to newly rendered timestamps
-  document.querySelectorAll('.timestamp-link').forEach(link => {
-    link.addEventListener('click', (e) => {
-      e.preventDefault();
-      const timeStr = link.getAttribute('data-time');
-      const [m, s] = timeStr.split(':');
-      const seconds = parseInt(m) * 60 + parseInt(s);
-      browser.tabs.create({ url: result.videoUrl + "&t=" + seconds + "s" });
-    });
-  });
-
-  // === Entities ===
-  const entityContainer = document.getElementById('entity-info');
-  const entityTags = document.getElementById('entity-tags');
-  if (result.entities && result.entities.length > 0) {
-    entityTags.replaceChildren();
-    result.entities.forEach(entity => {
-      const span = document.createElement('span');
-      span.textContent = entity;
-      span.style.cssText = "background: rgba(255,255,255,0.1); padding: 4px 8px; border-radius: 12px; font-size: 11px; white-space: nowrap;";
-      entityTags.appendChild(span);
-    });
-    entityContainer.style.display = 'block';
-  } else {
-    entityContainer.style.display = 'none';
-  }
-
-  // === SponsorBlock detalji ===
-  const sponsorContainer = document.getElementById('sponsor-info');
-  if (result.sponsorSaved && result.sponsorSaved > 0) {
-    const stats = result.categoryStats || {};
-    const categories = Object.entries(stats).sort((a, b) => b[1] - a[1]);
-
-    let html = `<div class="sponsor-header">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-      <span>SponsorBlock filtrirao <strong>${formatDuration(result.sponsorSaved)}</strong></span>
-    </div>`;
-
-    if (categories.length > 0) {
-      html += '<div class="sponsor-categories">';
-      for (const [cat, dur] of categories) {
-        const info = CATEGORY_LABELS[cat] || CATEGORY_LABELS.unknown;
-        html += `<div class="sponsor-cat">
-          <span class="cat-icon">${info.icon}</span>
-          <span class="cat-label">${info.label}</span>
-          <span class="cat-dur">${formatDuration(dur)}</span>
-        </div>`;
-      }
-      html += '</div>';
-    }
-
-    sponsorContainer.style.display = 'block';
-    setSafeHTML(sponsorContainer, html);
-  } else {
-    sponsorContainer.style.display = 'none';
-  }
-
-  // === Token / Cost info ===
-  const usageContainer = document.getElementById('usage-info');
-  if (result.usage && currentConfig) {
-    const u = result.usage;
-    setSafeHTML(usageContainer, `
-      <div class="usage-header">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1010 10A10 10 0 0012 2z"/><path d="M12 6v6l4 2"/></svg>
-        <span>${currentConfig.model || 'LLM'}</span>
-      </div>
-      <div class="usage-grid">
-        <div class="usage-item">
-          <span class="usage-label">Input tokeni</span>
-          <span class="usage-value">${u.promptTokens.toLocaleString()}</span>
-        </div>
-        <div class="usage-item">
-          <span class="usage-label">Output tokeni</span>
-          <span class="usage-value">${u.outputTokens.toLocaleString()}</span>
-        </div>
-        <div class="usage-item">
-          <span class="usage-label">Ukupno</span>
-          <span class="usage-value">${u.totalTokens.toLocaleString()}</span>
-        </div>
-        <div class="usage-item">
-          <span class="usage-label">Cena poziva</span>
-          <span class="usage-cost">~$${u.estimatedCost}</span>
-        </div>
-      </div>
-    `);
-    usageContainer.style.display = 'block';
-  } else {
-    usageContainer.style.display = 'none';
-  }
+  // Hide standalone containers since rendering is now inside #summary
+  document.getElementById('entity-info').style.display = 'none';
+  document.getElementById('sponsor-info').style.display = 'none';
+  document.getElementById('usage-info').style.display = 'none';
 }
 
 function generateWordCloud(transcript) {
@@ -140,9 +61,9 @@ function generateWordCloud(transcript) {
     return;
   }
   
-  const stopWords = new Set(['i', 'a', 'da', 'u', 'je', 'se', 'na', 'to', 'od', 'za', 'ne', 'kao', 'što', 'koji', 'sa', 'ili', 'su', 'samo', 'iz', 'kako', 'ali', 'sve', 'ovo', 'the', 'and', 'to', 'of', 'a', 'in', 'that', 'is', 'it', 'for', 'on', 'with', 'as', 'this', 'was', 'at', 'by', 'an', 'be', 'from', 'or', 'are', 'you']);
+  const stopWords = new Set(['i', 'a', 'da', 'u', 'je', 'se', 'na', 'to', 'od', 'za', 'ne', 'kao', '\u0161to', 'koji', 'sa', 'ili', 'su', 'samo', 'iz', 'kako', 'ali', 'sve', 'ovo', 'the', 'and', 'to', 'of', 'a', 'in', 'that', 'is', 'it', 'for', 'on', 'with', 'as', 'this', 'was', 'at', 'by', 'an', 'be', 'from', 'or', 'are', 'you']);
   
-  const words = transcript.toLowerCase().replace(/[^\wćčšžđ]+/g, ' ').split(/\s+/);
+  const words = transcript.toLowerCase().replace(/[^\w\u0107\u010d\u0161\u017e\u0111]+/g, ' ').split(/\s+/);
   const freq = {};
   words.forEach(w => {
     if (w.length > 3 && !stopWords.has(w)) {
@@ -212,7 +133,7 @@ async function regenerateSummary(level) {
     });
 
   } catch (e) {
-    alert("Greška pri regeneraciji: " + e.message);
+    alert("Gre\u0161ka pri regeneraciji: " + e.message);
   } finally {
     buttons.forEach(b => b.disabled = false);
     summaryEl.style.opacity = '1';
@@ -221,13 +142,7 @@ async function regenerateSummary(level) {
 
 function handleDownloadTranscript() {
   if (!currentTranscript) return;
-  const blob = new Blob([currentTranscript], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `transcript-${currentResult?.videoId || 'video'}.txt`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadAsFile(currentTranscript, `transcript-${currentResult?.videoId || 'video'}.txt`, 'text/plain');
 }
 
 async function init() {
@@ -289,13 +204,7 @@ async function init() {
 <h1>${currentResult?.title || 'Summary'}</h1>
 ${markdownToHtml(currentResult?.summary || '')}
 </body></html>`;
-      const blob = new Blob([htmlContent], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `summary-${currentResult?.videoId || 'video'}.html`;
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadAsFile(htmlContent, `summary-${currentResult?.videoId || 'video'}.html`, 'text/html');
     });
 
     document.getElementById('export-pdf-btn').addEventListener('click', () => {
@@ -304,42 +213,20 @@ ${markdownToHtml(currentResult?.summary || '')}
 
     document.getElementById('export-notion-btn').addEventListener('click', () => {
       const mdContent = `# ${currentResult?.title || 'Summary'}\n\n${currentResult?.summary || ''}`;
-      const blob = new Blob([mdContent], { type: 'text/markdown' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `summary-${currentResult?.videoId || 'video'}.md`;
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadAsFile(mdContent, `summary-${currentResult?.videoId || 'video'}.md`, 'text/markdown');
     });
 
     // Copy buttons
     document.getElementById('copy-md-btn').addEventListener('click', async function() {
       const data = await browser.storage.local.get('yt_summary_result');
-      await navigator.clipboard.writeText(data.yt_summary_result.summary);
-      this.classList.add('copied');
-      const btnText = this.querySelector('.btn-text');
-      const original = btnText.textContent;
-      btnText.textContent = '✓ Copied!';
-      setTimeout(() => {
-        this.classList.remove('copied');
-        btnText.textContent = original;
-      }, 2000);
+      copyWithFeedback(this, data.yt_summary_result.summary);
     });
 
     document.getElementById('copy-text-btn').addEventListener('click', async function() {
       const tempDiv = document.createElement('div');
       setSafeHTML(tempDiv, document.getElementById('summary').innerHTML);
       const plain = tempDiv.textContent.replace(/\n{3,}/g, '\n\n');
-      await navigator.clipboard.writeText(plain);
-      this.classList.add('copied');
-      const btnText = this.querySelector('.btn-text');
-      const original = btnText.textContent;
-      btnText.textContent = '✓ Copied!';
-      setTimeout(() => {
-        this.classList.remove('copied');
-        btnText.textContent = original;
-      }, 2000);
+      copyWithFeedback(this, plain);
     });
 
     // Entity extraction — runs in result page lifecycle (no race condition)
@@ -374,7 +261,7 @@ ${markdownToHtml(currentResult?.summary || '')}
     document.getElementById('loading').replaceChildren();
     const errorMsg = document.createElement('div');
     errorMsg.className = 'loading-text';
-    errorMsg.textContent = `Greška: ${e.message}`;
+    errorMsg.textContent = `Gre\u0161ka: ${e.message}`;
     document.getElementById('loading').appendChild(errorMsg);
   }
 }

@@ -12,6 +12,16 @@
 
     <div id="setup-view" class="view hidden">
       <div class="options" style="margin-bottom: 10px;">
+        <label data-i18n="ui_language">UI Language:</label>
+        <select id="ui-language">
+          <option value="en" selected>English</option>
+          <option value="sr">Srpski</option>
+          <option value="de">Deutsch</option>
+          <option value="es">Español</option>
+        </select>
+      </div>
+
+      <div class="options" style="margin-bottom: 10px;">
         <label data-i18n="llm_provider">LLM Provider:</label>
         <select id="llm-provider">
           <option value="gemini" selected>Gemini</option>
@@ -71,29 +81,20 @@
         <div id="custom-prompts-list" style="margin-top: 8px; font-size: 11px; display: flex; flex-direction: column; gap: 4px;"></div>
       </div>
 
-      <div class="sticky-footer">
-        <button id="save-key-btn" data-i18n="btn_save" style="flex: 1;">Save</button>
-        <button id="cancel-btn" class="secondary" data-i18n="btn_close" style="flex: 1; margin-top: 0;">Close</button>
-      </div>
-      
       <div class="dashboard" style="margin-top: 15px; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 6px;">
         <h4 data-i18n="dashboard_title" style="margin: 0 0 10px 0; font-size: 13px;">Dashboard (Usage)</h4>
         <div style="font-size: 12px; margin-bottom: 5px;"><span data-i18n="total_tokens">Total tokens:</span> <strong id="dash-tokens">0</strong></div>
         <div style="font-size: 12px; margin-bottom: 10px;"><span data-i18n="est_cost">Estimated cost:</span> <strong id="dash-cost">$0.00</strong></div>
         <button id="reset-stats-btn" class="secondary" data-i18n="btn_reset" style="font-size: 11px; padding: 4px 8px;">Reset stats</button>
       </div>
+
+      <div class="sticky-footer">
+        <button id="save-key-btn" data-i18n="btn_save" style="flex: 1;">Save</button>
+        <button id="cancel-btn" class="secondary" data-i18n="btn_close" style="flex: 1; margin-top: 0;">Close</button>
+      </div>
     </div>
 
     <div id="main-view" class="view">
-      <div class="options">
-        <label data-i18n="ui_language">UI Language:</label>
-        <select id="ui-language">
-          <option value="en" selected>English</option>
-          <option value="sr">Srpski</option>
-          <option value="de">Deutsch</option>
-          <option value="es">Español</option>
-        </select>
-      </div>
       <div class="options">
         <label data-i18n="output_language">Output Language:</label>
         <select id="output-language">
@@ -137,6 +138,7 @@
     </div>
   </div>
   <script src="i18n.js"></script>
+  <script src="prompts.js"></script>
   <script src="gemini.js"></script>
   <script src="transcript-fetcher.js"></script>
   <script src="transcript-pipeline.js"></script>

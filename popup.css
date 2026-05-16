@@ -1,3 +1,7 @@
+* {
+  box-sizing: border-box;
+}
+
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   width: 350px;
@@ -5,20 +9,27 @@ body {
   overflow-y: auto;
   margin: 0;
   padding: 15px;
-  padding-bottom: 60px; /* Space for the fixed footer */
   background-color: #f9f9f9;
   color: #333;
+}
+
+#setup-view {
+  padding-bottom: 70px; /* Space for fixed buttons in settings only */
 }
 
 .sticky-footer {
   display: flex;
   gap: 10px;
+  margin-top: 10px;
+}
+
+#setup-view .sticky-footer {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
   background-color: #f9f9f9;
-  padding: 10px 15px;
+  padding: 15px;
   z-index: 100;
   border-top: 1px solid #ddd;
 }
@@ -27,6 +38,14 @@ body {
   display: flex;
   flex-direction: column;
   gap: 15px;
+}
+
+.dashboard {
+  margin-top: 15px;
+  margin-bottom: 20px; /* Extra space to avoid overlap */
+  background: rgba(0,0,0,0.05);
+  padding: 10px;
+  border-radius: 6px;
 }
 
 header h2 {

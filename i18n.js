@@ -57,7 +57,8 @@ const I18N = {
     "btn_playlist": "Summarize Playlist",
     "batch_title": "Playlist Summary",
     "batch_badge": "Batch Processing",
-    "word_cloud": "Keywords"
+    "word_cloud": "Keywords",
+    "tldr_title": "TL;DR:"
   },
   sr: {
     "app_title": "YT Summary AI",
@@ -176,7 +177,8 @@ const I18N = {
     "btn_playlist": "Playlist zusammenfassen",
     "batch_title": "Playlist-Zusammenfassung",
     "batch_badge": "Stapelverarbeitung",
-    "word_cloud": "Schlüsselwörter"
+    "word_cloud": "Schlüsselwörter",
+    "tldr_title": "Zusammenfassung:"
   },
   es: {
     "app_title": "YT Summary AI",
@@ -209,7 +211,7 @@ const I18N = {
     "status_init": "Inicializando...",
     "status_fetching": "Obteniendo transcripción...",
     "status_thinking": "La IA está pensando...",
-    "status_done": "¡Hecho! Resumen abierto en una nueva pestaña.",
+    "status_done": "¡Hecho! Resumen abierto en una neue pestańa.",
     "status_error": "Error: ",
     "result_loading": "Cargando resumen...",
     "result_badge": "Resumen de IA",
@@ -231,11 +233,12 @@ const I18N = {
     "custom_prompt_title": "Plantilla de Prompt:",
     "custom_prompt_name": "Nombre de Plantilla",
     "custom_prompt_text": "Eres un experto...",
-    "btn_add_prompt": "Añadir Plantilla",
+    "btn_add_prompt": "Ańadir Plantilla",
     "btn_playlist": "Resumir Lista",
     "batch_title": "Resumen de la Lista",
     "batch_badge": "Procesamiento Lotes",
-    "word_cloud": "Palabras Clave"
+    "word_cloud": "Palabras Clave",
+    "tldr_title": "Resumen:"
   }
 };
 
@@ -263,6 +266,4 @@ function localizePage(lang = 'en') {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { I18N, getLocalizedString, localizePage };
-}
-}ge };
 }

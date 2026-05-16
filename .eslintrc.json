@@ -35,7 +35,13 @@
     "fetchTranscriptInPageContext": "readonly",
     "I18N": "readonly",
     "buildSystemInstruction": "readonly",
-    "chunkTranscript": "readonly"
+    "chunkTranscript": "readonly",
+    "DETAIL_PROMPTS": "readonly",
+    "PERSONA_PROMPTS": "readonly",
+    "resolvePersona": "readonly",
+    "renderSummaryCard": "readonly",
+    "CATEGORY_LABELS": "readonly",
+    "formatDuration": "readonly"
   },
   "ignorePatterns": [
     "node_modules/",

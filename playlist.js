@@ -45,21 +45,25 @@ document.addEventListener('DOMContentLoaded', async () => {
       div.style.display = 'block';
       div.style.marginBottom = '20px';
       
-      let summaryText = result.text;
-      const tldrMatch = summaryText.match(/TL;DR:\s*(.*?)(\n|$)/i);
-      let tldrHtml = '';
-      if (tldrMatch) {
-        tldrHtml = `<div style="padding: 10px; background: rgba(255, 215, 0, 0.1); border-radius: 6px; margin-bottom: 10px;"><strong>TL;DR:</strong> ${tldrMatch[1]}</div>`;
-        summaryText = summaryText.replace(tldrMatch[0], '').trim();
-      }
+      // Video header
+      const header = document.createElement('div');
+      header.style.cssText = 'border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 15px;';
+      header.innerHTML = `<h2 style="margin:0;"><a href="https://youtu.be/${videoId}" target="_blank" style="color: #818cf8; text-decoration: none;">Video ${i+1}</a></h2>`;
+      div.appendChild(header);
 
-      div.innerHTML = `
-        <div style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 15px;">
-          <h2 style="margin:0;"><a href="https://youtu.be/${videoId}" target="_blank" style="color: #818cf8; text-decoration: none;">Video ${i+1}</a></h2>
-        </div>
-        ${tldrHtml}
-        ${markdownToHtml(summaryText)}
-      `;
+      // Delegate rendering to shared summary-renderer.js
+      const contentDiv = document.createElement('div');
+      div.appendChild(contentDiv);
+      renderSummaryCard(contentDiv, {
+        summary: result.text,
+        title: `Video ${i + 1}`,
+        videoId,
+        videoUrl: `https://youtu.be/${videoId}`,
+        sponsorSaved: transcript.savedSeconds,
+        categoryStats: transcript.categoryStats,
+        usage: result.usage
+      }, batch_job.llmConfig);
+
       resultsContainer.appendChild(div);
 
     } catch (err) {

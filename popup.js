@@ -12,7 +12,7 @@ window.onunhandledrejection = function(event) {
   document.body.appendChild(errDiv);
 };
 
-const PLUGIN_VERSION = "4.1";
+const PLUGIN_VERSION = "4.3";
 
 const PRESETS = {
   gemini: { url: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent", model: "gemini-3-flash-preview" },
@@ -45,8 +45,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const debugLog = document.getElementById('debug-log');
   const statusDiv = document.getElementById('status');
 
-  const uiLanguageSelect = document.getElementById('ui-language');
-  const outputLanguageSelect = document.getElementById('output-language');
+  const uiLanguageSelect = document.querySelector('#ui-language');
+  const outputLanguageSelect = document.querySelector('#output-language');
 
   const dashTokens = document.getElementById('dash-tokens');
   const dashCost = document.getElementById('dash-cost');
@@ -325,12 +325,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       log(`Pronađeno ${videoIds.length} videa u playlisti.`);
 
       const detail = document.getElementById('detail-level').value;
-      const personaVal = document.getElementById('persona-level').value;
-      let persona = personaVal;
-      if (personaVal.startsWith('custom_')) {
-        const idx = parseInt(personaVal.replace('custom_', ''));
-        if (customPrompts[idx]) persona = 'CUSTOM:' + customPrompts[idx].text;
-      }
+      const persona = resolvePersona(document.getElementById('persona-level').value, customPrompts);
       const outputLang = config.outputLanguage || 'English';
 
       await browser.storage.local.set({
@@ -384,17 +379,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!llm_config) throw new Error("LLM nije konfigurisan.");
 
       const detail = document.getElementById('detail-level').value;
-      const personaVal = document.getElementById('persona-level').value;
-      let persona = personaVal;
-      if (personaVal.startsWith('custom_')) {
-        const idx = parseInt(personaVal.replace('custom_', ''));
-        if (customPrompts[idx]) {
-          persona = 'CUSTOM:' + customPrompts[idx].text;
-        }
-      }
+      const persona = resolvePersona(document.getElementById('persona-level').value, customPrompts);
       const outputLang = llm_config.outputLanguage || 'English';
       
-      log(`LLM: provider=${llm_config.provider}, model=${llm_config.model}, detail=${detail}, persona=${persona.startsWith('CUSTOM:') ? 'custom' : persona}, outputLang=${outputLang}`);
+      log(`LLM: provider=${llm_config.provider}, model=${llm_config.model}, detail=${detail}, persona=${Object.prototype.hasOwnProperty.call(PERSONA_PROMPTS, persona) ? persona : 'custom'}, outputLang=${outputLang}`);
       if (transcript.chapters && transcript.chapters.length > 0) {
         log(`Chapters: ${transcript.chapters.length} found.`);
       }
