@@ -1,6 +1,7 @@
 // Konsolidovani modul za preuzimanje, filtriranje i formatiranje transkripta.
 // Apsorbuje logiku iz bivših transcript-parser.js i sponsor-filter.js.
 // Interfejs: getProcessedTranscript(tabId, videoId) → {text, savedSeconds, categoryStats, ...}
+/* exported getProcessedTranscript */
 
 async function getSponsorSegments(videoId) {
   try {

@@ -2,6 +2,7 @@
 // Ima pristup: cookie-jima, ytInitialPlayerResponse, ytInitialData, ytcfg
 // Koristi se iz transcript-pipeline.js via scripting.executeScript({func: fetchTranscriptInPageContext})
 // Vraća: {status, segments: [{text, startSec, durSec}], debugLines}
+/* exported fetchTranscriptInPageContext */
 
 async function fetchTranscriptInPageContext(videoId) {
   const D = [];
@@ -114,6 +115,13 @@ async function fetchTranscriptInPageContext(videoId) {
     dbg("M2: /get_transcript from MAIN world");
     let transcriptParams = null;
     if (window.ytInitialData?.engagementPanels) {
+      // Staleness check: ytInitialData may belong to a previously viewed video on SPA navigation
+      const ytDataVideoId = window.ytInitialData?.currentVideoEndpoint?.watchEndpoint?.videoId
+        || window.ytInitialData?.playerOverlays?.playerOverlayRenderer?.videoDetails?.playerOverlayVideoDetailsRenderer?.title?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId;
+      if (ytDataVideoId && ytDataVideoId !== videoId) {
+        dbg(`M2: stale ytInitialData (${ytDataVideoId} != ${videoId}), skipping`);
+        return null;
+      }
       for (const panel of window.ytInitialData.engagementPanels) {
         const r = panel.engagementPanelSectionListRenderer;
         if (r?.panelIdentifier === 'engagement-panel-searchable-transcript') {

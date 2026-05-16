@@ -5,6 +5,10 @@ module.exports = {
     '.web-ext-config.js',
     'README.md',
     'DOCUMENTATION.md',
+    'GEMINI.md',
+    'docs.html',
+    '.eslintrc.json',
+    'tests/',
     '.gitignore',
     '.gitattributes',
     'web-ext-artifacts/'

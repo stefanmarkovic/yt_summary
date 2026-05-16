@@ -1,4 +1,5 @@
 // Quiz modul — generisanje kviza, renderovanje, provera odgovora
+/* exported handleGenerateQuiz */
 
 async function handleGenerateQuiz(config, transcript, messagesEl, buttonEl) {
   if (!transcript || !config) return;

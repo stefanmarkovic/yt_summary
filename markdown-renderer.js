@@ -1,4 +1,5 @@
 // Markdown → HTML renderer (pure function, zero dependencies)
+/* exported markdownToHtml, setSafeHTML */
 
 function markdownToHtml(md) {
   let html = md;
@@ -14,6 +15,8 @@ function markdownToHtml(md) {
   html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
   html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n');
   html = html.replace(/^---$/gm, '<hr>');
+  // Ordered list items use a temporary <OLI> tag to disambiguate from unordered <li>
+  // during regex processing, then get converted to real <li> inside <ol> below.
   html = html.replace(/^\d+\. (.+)$/gm, '<OLI>$1</OLI>');
   html = html.replace(/^[-*] (.+)$/gm, '<li>$1</li>');
   html = html.replace(/((<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');

@@ -195,13 +195,14 @@ async function init() {
 
     // Export Handlers
     document.getElementById('export-html-btn').addEventListener('click', () => {
+      const safeTitle = (currentResult?.title || 'Summary').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
       const htmlContent = `<!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><title>${currentResult?.title || 'Summary'}</title>
+<head><meta charset="utf-8"><title>${safeTitle}</title>
 <style>body{font-family:sans-serif;max-width:800px;margin:2rem auto;line-height:1.6;color:#333;}</style>
 </head>
 <body>
-<h1>${currentResult?.title || 'Summary'}</h1>
+<h1>${safeTitle}</h1>
 ${markdownToHtml(currentResult?.summary || '')}
 </body></html>`;
       downloadAsFile(htmlContent, `summary-${currentResult?.videoId || 'video'}.html`, 'text/html');

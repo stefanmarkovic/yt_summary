@@ -48,7 +48,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Video header
       const header = document.createElement('div');
       header.style.cssText = 'border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 15px;';
-      header.innerHTML = `<h2 style="margin:0;"><a href="https://youtu.be/${videoId}" target="_blank" style="color: #818cf8; text-decoration: none;">Video ${i+1}</a></h2>`;
+      const h2 = document.createElement('h2');
+      h2.style.margin = '0';
+      const link = document.createElement('a');
+      link.href = `https://youtu.be/${videoId}`;
+      link.target = '_blank';
+      link.style.cssText = 'color: #818cf8; text-decoration: none;';
+      link.textContent = `Video ${i+1}`;
+      h2.appendChild(link);
+      header.appendChild(h2);
       div.appendChild(header);
 
       // Delegate rendering to shared summary-renderer.js
@@ -71,7 +79,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       div.className = 'summary info-card';
       div.style.display = 'block';
       div.style.marginBottom = '20px';
-      div.innerHTML = `<h3 style="color: #ef4444;">Video ${i+1} Error</h3><p>${err.message}</p>`;
+      const errH3 = document.createElement('h3');
+      errH3.style.color = '#ef4444';
+      errH3.textContent = `Video ${i+1} Error`;
+      const errP = document.createElement('p');
+      errP.textContent = err.message;
+      div.appendChild(errH3);
+      div.appendChild(errP);
       resultsContainer.appendChild(div);
       console.error(`Batch video ${videoId} error:`, err);
     } finally {

@@ -1,6 +1,6 @@
 {
   "name": "yt-summary-ai",
-  "version": "4.2.0",
+  "version": "4.4.0",
   "description": "AI sažetak YouTube videa",
   "scripts": {
     "package": "web-ext build --overwrite-dest",

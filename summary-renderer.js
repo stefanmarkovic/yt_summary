@@ -1,5 +1,6 @@
 // summary-renderer.js — Reusable summary card rendering
 // Used by result.js and playlist.js. Depends on: markdownToHtml, setSafeHTML (from markdown-renderer.js)
+/* exported renderSummaryCard */
 
 const CATEGORY_LABELS = {
   sponsor: { label: 'Sponzor', icon: '💰' },

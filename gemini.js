@@ -1,5 +1,6 @@
 // LLM transport module (Gemini, DeepSeek, Ollama)
 // Prompt construction lives in prompts.js (loaded before this file)
+/* exported llmSummarizeLong, llmExtractEntities, llmQuiz, llmChat */
 
 const LLM_TIMEOUT_MS = 180_000;
 
@@ -145,6 +146,8 @@ async function llmRequest(config, systemInstruction, userMessage, history = [], 
       clearTimeout(timeoutId);
     }
   }
+  // All retries exhausted (only reached if every attempt got 503)
+  throw new Error(`API nedostupan nakon ${maxRetries + 1} pokušaja (HTTP 503). Pokušajte kasnije.`);
 }
 
 // === Duboki task modul ===
@@ -181,10 +184,16 @@ function chunkTranscript(text, maxChars) {
   while (currentPos < text.length) {
     let endPos = currentPos + maxChars;
     if (endPos < text.length) {
-      // Pokušaj da nađeš kraj rečenice ili pasusa da ne sečeš usred reči
+      // Pokušaj da nađeš kraj rečenice. Ako nema interpunkcije (čest slučaj kod ASR transkripata),
+      // seči na razmaku umesto usred reči.
       const lastDot = text.lastIndexOf('. ', endPos);
       if (lastDot > currentPos + (maxChars * 0.8)) {
         endPos = lastDot + 1;
+      } else {
+        const lastSpace = text.lastIndexOf(' ', endPos);
+        if (lastSpace > currentPos + (maxChars * 0.8)) {
+          endPos = lastSpace + 1;
+        }
       }
     }
     chunks.push(text.substring(currentPos, endPos).trim());

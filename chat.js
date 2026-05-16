@@ -1,4 +1,5 @@
 // Chat modul — owns chatHistory internally, ne leakuje stanje kao global
+/* exported initChat */
 
 function initChat(config, transcript, messagesEl, inputEl, sendBtnEl) {
   const chatHistory = [];

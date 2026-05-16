@@ -1,5 +1,5 @@
-// YT Summary AI - popup.js v4.0
-window.onerror = function(message, source, lineno, colno, error) {
+// YT Summary AI - popup.js
+window.onerror = function(message, source, lineno, colno, _error) {
   const errDiv = document.createElement('div');
   errDiv.style.cssText = 'color:red;font-size:10px;background:#fee;padding:5px;margin:5px;border:1px solid red;';
   errDiv.textContent = `ERROR: ${message} at ${lineno}:${colno}`;
@@ -12,7 +12,9 @@ window.onunhandledrejection = function(event) {
   document.body.appendChild(errDiv);
 };
 
-const PLUGIN_VERSION = "4.3";
+const PLUGIN_VERSION = (typeof browser !== 'undefined' && browser.runtime?.getManifest)
+  ? browser.runtime.getManifest().version
+  : "4.4";
 
 const PRESETS = {
   gemini: { url: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent", model: "gemini-3-flash-preview" },
@@ -149,7 +151,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     const data = await browser.storage.local.get('custom_templates');
     customPrompts = data.custom_templates || [];
-  } catch(e) {}
+  } catch(e) { log("Custom templates load failed: " + e.message); }
 
   function renderCustomPrompts() {
     const list = document.getElementById('custom-prompts-list');
@@ -164,10 +166,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       const div = document.createElement('div');
       div.style.display = 'flex';
       div.style.justifyContent = 'space-between';
-      div.innerHTML = `<span>${p.name}</span><button class="secondary" style="padding:2px 5px; font-size:9px; margin:0;" data-idx="${idx}">X</button>`;
-      div.querySelector('button').addEventListener('click', async (e) => {
-        const i = e.target.dataset.idx;
-        customPrompts.splice(i, 1);
+      const span = document.createElement('span');
+      span.textContent = p.name;
+      const delBtn = document.createElement('button');
+      delBtn.className = 'secondary';
+      delBtn.style.cssText = 'padding:2px 5px; font-size:9px; margin:0;';
+      delBtn.dataset.idx = idx;
+      delBtn.textContent = 'X';
+      div.appendChild(span);
+      div.appendChild(delBtn);
+      delBtn.addEventListener('click', async () => {
+        customPrompts.splice(idx, 1);
         await browser.storage.local.set({ custom_templates: customPrompts });
         renderCustomPrompts();
       });
@@ -279,7 +288,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (urlObj.searchParams.has('list')) {
           document.getElementById('playlist-summarize-btn').classList.remove('hidden');
         }
-      } catch(e) {}
+      } catch(e) { console.warn("Playlist URL parse error:", e.message); }
     }
   });
 
@@ -349,7 +358,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     statusDiv.innerText = typeof getLocalizedString === 'function' ? getLocalizedString('status_init', config.uiLanguage || 'en') : "Initializing...";
     summarizeBtn.disabled = true;
 
-    let heartbeatInterval;
 
     try {
       const tabs = await browser.tabs.query({ active: true, currentWindow: true });
@@ -423,7 +431,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       log(`Stack: ${error.stack?.substring(0, 300) || 'N/A'}`);
       statusDiv.innerText = "Greška: " + error.message;
     } finally {
-      if (heartbeatInterval) clearInterval(heartbeatInterval);
       summarizeBtn.disabled = false;
     }
   }
