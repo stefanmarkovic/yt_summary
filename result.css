@@ -395,3 +395,21 @@ h1 {
 }
 .chat-send-btn:hover { background: #4338ca; }
 .chat-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+@media print {
+  body { background: white; color: black; }
+  .hero { background: none; padding: 0; border: none; }
+  h1 { color: black; margin-bottom: 0.5rem; }
+  .toolbar, .detail-buttons, .chat-section, #loading, .badge { display: none !important; }
+  .meta { color: #555; }
+  #tldr-container, #word-cloud-container, #entity-info, #sponsor-info, #usage-info { 
+    page-break-inside: avoid; 
+    border: 1px solid #ccc !important; 
+    background: transparent !important; 
+    color: black !important; 
+  }
+  #tldr-container h4, #tldr-text { color: black !important; }
+  .summary { color: black; }
+  .summary h1, .summary h2, .summary h3, .summary strong { color: black; }
+  .summary a { color: black; text-decoration: underline; }
+}

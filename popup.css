@@ -1,10 +1,26 @@
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   width: 350px;
+  max-height: 550px;
+  overflow-y: auto;
   margin: 0;
   padding: 15px;
+  padding-bottom: 60px; /* Space for the fixed footer */
   background-color: #f9f9f9;
   color: #333;
+}
+
+.sticky-footer {
+  display: flex;
+  gap: 10px;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: #f9f9f9;
+  padding: 10px 15px;
+  z-index: 100;
+  border-top: 1px solid #ddd;
 }
 
 .container {

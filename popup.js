@@ -1,4 +1,16 @@
 // YT Summary AI - popup.js v4.0
+window.onerror = function(message, source, lineno, colno, error) {
+  const errDiv = document.createElement('div');
+  errDiv.style.cssText = 'color:red;font-size:10px;background:#fee;padding:5px;margin:5px;border:1px solid red;';
+  errDiv.textContent = `ERROR: ${message} at ${lineno}:${colno}`;
+  document.body.appendChild(errDiv);
+};
+window.onunhandledrejection = function(event) {
+  const errDiv = document.createElement('div');
+  errDiv.style.cssText = 'color:red;font-size:10px;background:#fee;padding:5px;margin:5px;border:1px solid red;';
+  errDiv.textContent = `PROMISE REJECTION: ${event.reason}`;
+  document.body.appendChild(errDiv);
+};
 
 const PLUGIN_VERSION = "4.1";
 
@@ -32,6 +44,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const debugArea = document.getElementById('debug-area');
   const debugLog = document.getElementById('debug-log');
   const statusDiv = document.getElementById('status');
+
+  const uiLanguageSelect = document.getElementById('ui-language');
+  const outputLanguageSelect = document.getElementById('output-language');
 
   const dashTokens = document.getElementById('dash-tokens');
   const dashCost = document.getElementById('dash-cost');
@@ -109,7 +124,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const data = await browser.storage.local.get('llm_config');
     config = data.llm_config || {};
   } catch(e) {
-    log("Greska pri ucitavanju: " + e.message);
+    log("Error loading config: " + e.message);
   }
 
   // Migration for old config
@@ -126,6 +141,74 @@ document.addEventListener('DOMContentLoaded', async () => {
   contextWindowInput.value = config.contextWindow || 32768;
   temperatureInput.value = config.temperature || 0.7;
   topPInput.value = config.topP || 1.0;
+
+  uiLanguageSelect.value = config.uiLanguage || 'en';
+  outputLanguageSelect.value = config.outputLanguage || 'English';
+
+  let customPrompts = [];
+  try {
+    const data = await browser.storage.local.get('custom_templates');
+    customPrompts = data.custom_templates || [];
+  } catch(e) {}
+
+  function renderCustomPrompts() {
+    const list = document.getElementById('custom-prompts-list');
+    list.replaceChildren();
+    const personaSelect = document.getElementById('persona-level');
+    // Keep only standard options
+    Array.from(personaSelect.options).forEach(opt => {
+      if (opt.value.startsWith('custom_')) opt.remove();
+    });
+
+    customPrompts.forEach((p, idx) => {
+      const div = document.createElement('div');
+      div.style.display = 'flex';
+      div.style.justifyContent = 'space-between';
+      div.innerHTML = `<span>${p.name}</span><button class="secondary" style="padding:2px 5px; font-size:9px; margin:0;" data-idx="${idx}">X</button>`;
+      div.querySelector('button').addEventListener('click', async (e) => {
+        const i = e.target.dataset.idx;
+        customPrompts.splice(i, 1);
+        await browser.storage.local.set({ custom_templates: customPrompts });
+        renderCustomPrompts();
+      });
+      list.appendChild(div);
+
+      const opt = document.createElement('option');
+      opt.value = 'custom_' + idx;
+      opt.textContent = `Custom: ${p.name}`;
+      personaSelect.appendChild(opt);
+    });
+  }
+  renderCustomPrompts();
+
+  document.getElementById('add-custom-prompt-btn').addEventListener('click', async () => {
+    const name = document.getElementById('custom-prompt-name').value.trim();
+    const text = document.getElementById('custom-prompt-text').value.trim();
+    if (name && text) {
+      customPrompts.push({ name, text });
+      await browser.storage.local.set({ custom_templates: customPrompts });
+      document.getElementById('custom-prompt-name').value = '';
+      document.getElementById('custom-prompt-text').value = '';
+      renderCustomPrompts();
+    }
+  });
+
+  if (typeof localizePage === 'function') {
+    localizePage(uiLanguageSelect.value);
+  }
+
+  uiLanguageSelect.addEventListener('change', async () => {
+    config.uiLanguage = uiLanguageSelect.value;
+    await browser.storage.local.set({ llm_config: config });
+    if (typeof localizePage === 'function') {
+      localizePage(config.uiLanguage);
+    }
+  });
+
+  outputLanguageSelect.addEventListener('change', async () => {
+    config.outputLanguage = outputLanguageSelect.value;
+    await browser.storage.local.set({ llm_config: config });
+  });
 
   if (providerSelect.value === 'gemini') {
     const savedModel = config.model || geminiModelSelect.value;
@@ -151,10 +234,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       apiKey: apiKeyInput.value.trim(),
       contextWindow: parseInt(contextWindowInput.value) || 32768,
       temperature: parseFloat(temperatureInput.value) || 0.7,
-      topP: parseFloat(topPInput.value) || 1.0
+      topP: parseFloat(topPInput.value) || 1.0,
+      uiLanguage: uiLanguageSelect.value,
+      outputLanguage: outputLanguageSelect.value
     };
     if (newConfig.url && newConfig.model) {
       await browser.storage.local.set({ llm_config: newConfig });
+      config = newConfig; // update local ref
       log("Podešavanja sačuvana.");
       showView('main');
     } else {
@@ -184,9 +270,88 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // Playlist detection
+  browser.tabs.query({ active: true, currentWindow: true }).then(tabs => {
+    const tab = tabs[0];
+    if (tab && tab.url && tab.url.includes('youtube.com')) {
+      try {
+        const urlObj = new URL(tab.url);
+        if (urlObj.searchParams.has('list')) {
+          document.getElementById('playlist-summarize-btn').classList.remove('hidden');
+        }
+      } catch(e) {}
+    }
+  });
+
+  const playlistSummarizeBtn = document.getElementById('playlist-summarize-btn');
+  if (playlistSummarizeBtn) {
+    playlistSummarizeBtn.addEventListener('click', async () => {
+      log("Inicijalizacija batch procesiranja...");
+      playlistSummarizeBtn.disabled = true;
+      const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+      const tab = tabs[0];
+      
+      const [{ result: videoIds }] = await browser.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => {
+          const ids = new Set();
+          try {
+            const panels = window.ytInitialData?.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents?.[0]?.playlistVideoListRenderer?.contents;
+            if (panels) {
+              for (const item of panels) {
+                if (item.playlistVideoRenderer?.videoId) {
+                  ids.add(item.playlistVideoRenderer.videoId);
+                }
+              }
+            }
+            document.querySelectorAll('a.ytd-playlist-panel-video-renderer, a.ytd-playlist-video-renderer').forEach(a => {
+              const v = new URLSearchParams(a.search).get('v');
+              if (v) ids.add(v);
+            });
+            // Try url params
+            const v = new URLSearchParams(window.location.search).get('v');
+            if (v && ids.size === 0) ids.add(v); // At least the current one
+          } catch (e) {}
+          return Array.from(ids);
+        }
+      });
+
+      if (!videoIds || videoIds.length === 0) {
+        alert("No videos found in playlist.");
+        playlistSummarizeBtn.disabled = false;
+        return;
+      }
+
+      log(`Pronađeno ${videoIds.length} videa u playlisti.`);
+
+      const detail = document.getElementById('detail-level').value;
+      const personaVal = document.getElementById('persona-level').value;
+      let persona = personaVal;
+      if (personaVal.startsWith('custom_')) {
+        const idx = parseInt(personaVal.replace('custom_', ''));
+        if (customPrompts[idx]) persona = 'CUSTOM:' + customPrompts[idx].text;
+      }
+      const outputLang = config.outputLanguage || 'English';
+
+      await browser.storage.local.set({
+        batch_job: {
+          videoIds,
+          llmConfig: config,
+          detail,
+          persona,
+          outputLang,
+          timestamp: Date.now()
+        }
+      });
+
+      await browser.tabs.create({ url: browser.runtime.getURL('playlist.html') });
+      window.close();
+    });
+  }
+
   async function startAnalysis() {
-    log(`=== Nova Analiza | v${PLUGIN_VERSION} | ${navigator.userAgent.match(/Firefox\/[\d.]+/)?.[0] || '?'} ===`);
-    statusDiv.innerText = "Inicijalizacija...";
+    log(`=== New Analysis | v${PLUGIN_VERSION} | ${navigator.userAgent.match(/Firefox\/[\d.]+/)?.[0] || '?'} ===`);
+    statusDiv.innerText = typeof getLocalizedString === 'function' ? getLocalizedString('status_init', config.uiLanguage || 'en') : "Initializing...";
     summarizeBtn.disabled = true;
 
     let heartbeatInterval;
@@ -201,28 +366,37 @@ document.addEventListener('DOMContentLoaded', async () => {
       log(`Video ID: ${videoId}`);
 
       // Transcript pipeline: dohvatanje, parsiranje, SponsorBlock filtriranje
-      statusDiv.innerText = "Dohvatanje i obrada transkripta...";
+      statusDiv.innerText = typeof getLocalizedString === 'function' ? getLocalizedString('status_fetching', config.uiLanguage || 'en') : "Fetching transcript...";
       const transcript = await getProcessedTranscript(tab.id, videoId);
 
       for (const line of transcript.debugLines) {
         log(`  [PAGE] ${line}`);
       }
-      log(`Transkript: ${transcript.segmentCount} segmenata. SponsorBlock: ${transcript.sponsorCount} (${Math.round(transcript.savedSeconds)}s filtrirano).`);
+      log(`Transcript: ${transcript.segmentCount} segments. SponsorBlock: ${transcript.sponsorCount} (${Math.round(transcript.savedSeconds)}s filtered).`);
       if (Object.keys(transcript.categoryStats).length > 0) {
-        log(`Kategorije: ${Object.entries(transcript.categoryStats).map(([k, v]) => `${k}=${Math.round(v)}s`).join(', ')}`);
+        log(`Categories: ${Object.entries(transcript.categoryStats).map(([k, v]) => `${k}=${Math.round(v)}s`).join(', ')}`);
       }
-      log(`Tekst: ${transcript.text.length} kar (~${Math.round(transcript.text.length / 4)} tokena).`);
+      log(`Text: ${transcript.text.length} chars (~${Math.round(transcript.text.length / 4)} tokens).`);
 
       // LLM sumarizacija
-      statusDiv.innerText = "AI razmišlja...";
+      statusDiv.innerText = typeof getLocalizedString === 'function' ? getLocalizedString('status_thinking', config.uiLanguage || 'en') : "AI is thinking...";
       const { llm_config } = await browser.storage.local.get('llm_config');
       if (!llm_config) throw new Error("LLM nije konfigurisan.");
 
       const detail = document.getElementById('detail-level').value;
-      const persona = document.getElementById('persona-level').value;
-      log(`LLM: provider=${llm_config.provider}, model=${llm_config.model}, detail=${detail}, persona=${persona}`);
+      const personaVal = document.getElementById('persona-level').value;
+      let persona = personaVal;
+      if (personaVal.startsWith('custom_')) {
+        const idx = parseInt(personaVal.replace('custom_', ''));
+        if (customPrompts[idx]) {
+          persona = 'CUSTOM:' + customPrompts[idx].text;
+        }
+      }
+      const outputLang = llm_config.outputLanguage || 'English';
+      
+      log(`LLM: provider=${llm_config.provider}, model=${llm_config.model}, detail=${detail}, persona=${persona.startsWith('CUSTOM:') ? 'custom' : persona}, outputLang=${outputLang}`);
       if (transcript.chapters && transcript.chapters.length > 0) {
-        log(`Poglavlja: ${transcript.chapters.length} pronađeno.`);
+        log(`Chapters: ${transcript.chapters.length} found.`);
       }
 
       const onProgress = (msg) => {
@@ -230,9 +404,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         log(`[PROGRES] ${msg}`);
       };
 
-      const result = await llmSummarizeLong(llm_config, transcript.text, detail, persona, transcript.chapters, onProgress);
-      log(`Odgovor: ${result.text.length} kar | Tokeni: ${result.usage.promptTokens} in + ${result.usage.outputTokens} out = ${result.usage.totalTokens} total`);
-      log(`Cena: ~$${result.usage.estimatedCost}`);
+      const result = await llmSummarizeLong(llm_config, transcript.text, detail, persona, transcript.chapters, outputLang, onProgress);
+      log(`Response: ${result.text.length} chars | Tokens: ${result.usage.promptTokens} in + ${result.usage.outputTokens} out = ${result.usage.totalTokens} total`);
+      log(`Cost: ~$${result.usage.estimatedCost}`);
 
       const videoTitle = tab.title?.replace(' - YouTube', '') || 'Video sažetak';
 
@@ -254,10 +428,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       await browser.tabs.create({ url: browser.runtime.getURL('result.html') });
 
       statusDiv.innerText = "Gotovo! Sažetak otvoren u novom tabu.";
-      log("=== Završeno — otvoren novi tab ===");
+      log("=== Finished — opened new tab ===");
 
     } catch (error) {
-      log(`GREŠKA: ${error.message}`);
+      log(`ERROR: ${error.message}`);
       log(`Stack: ${error.stack?.substring(0, 300) || 'N/A'}`);
       statusDiv.innerText = "Greška: " + error.message;
     } finally {

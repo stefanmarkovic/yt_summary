@@ -73,7 +73,7 @@ function parseGeminiResponse(result, config) {
 }
 
 function parseOpenAIResponse(result, config) {
-  if (!result.choices?.length) throw new Error("API nije vratio odgovor.");
+  if (!result.choices?.length) throw new Error("API did not return a response.");
   const text = result.choices[0].message.content;
   const meta = result.usage || {};
   const usage = calculateUsage(config.provider, config.model, meta.prompt_tokens, meta.completion_tokens);
@@ -116,6 +116,8 @@ function cleanJsonResponse(text) {
 function buildSystemInstruction(transcript, taskSpec) {
   let prompt = `Transkript YouTube videa:\n${transcript}\n\n`;
   
+  const outputLanguage = taskSpec.outputLanguage || 'English';
+
   if (taskSpec.chapters && taskSpec.chapters.length > 0) {
     prompt += `Zvanična poglavlja videa:\n`;
     taskSpec.chapters.forEach(c => {
@@ -123,14 +125,16 @@ function buildSystemInstruction(transcript, taskSpec) {
       const sec = Math.floor(c.timeSec % 60).toString().padStart(2, '0');
       prompt += `- [${min}:${sec}] ${c.title}\n`;
     });
-    prompt += `\nInstrukcija: Koristi ova poglavlja da strukturiraš sažetak. ${taskSpec.instruction} Odgovaraj na srpskom jeziku.`;
+    prompt += `\nInstrukcija: Koristi ova poglavlja da strukturiraš sažetak. ${taskSpec.instruction} Na početku uvek stavi jednu rečenicu sa prefiksom 'TL;DR:' koja sažima ceo video. Odgovaraj na ${outputLanguage} jeziku (Respond in ${outputLanguage} language).`;
   } else {
-    prompt += `Instrukcija: ${taskSpec.instruction} Odgovaraj na srpskom jeziku.`;
+    prompt += `Instrukcija: ${taskSpec.instruction} Na početku uvek stavi jednu rečenicu sa prefiksom 'TL;DR:' koja sažima ceo video. Odgovaraj na ${outputLanguage} jeziku (Respond in ${outputLanguage} language).`;
   }
 
   prompt += ` Obavezno zadrži približne vremenske oznake u formatu [MM:SS] iz originalnog transkripta kada referenciraš delove videa.`;
   if (taskSpec.persona && PERSONA_PROMPTS[taskSpec.persona]) {
     prompt += `\n\nTON I STIL: ${PERSONA_PROMPTS[taskSpec.persona]}`;
+  } else if (taskSpec.persona && taskSpec.persona.startsWith('CUSTOM:')) {
+    prompt += `\n\nTON I STIL: ${taskSpec.persona.substring(7)}`;
   }
   return prompt;
 }
@@ -205,8 +209,8 @@ async function llmTask(config, transcript, taskSpec) {
 
 // === Javne task funkcije ===
 
-function llmSummarize(config, transcript, detailLevel, persona, chapters = []) {
-  return llmTask(config, transcript, { instruction: DETAIL_PROMPTS[detailLevel], persona, chapters });
+function llmSummarize(config, transcript, detailLevel, persona, chapters = [], outputLanguage = 'English') {
+  return llmTask(config, transcript, { instruction: DETAIL_PROMPTS[detailLevel], persona, chapters, outputLanguage });
 }
 
 function chunkTranscript(text, maxChars) {
@@ -227,25 +231,26 @@ function chunkTranscript(text, maxChars) {
   return chunks;
 }
 
-async function llmSummarizeLong(config, transcript, detailLevel, persona, chapters = [], onProgress) {
+async function llmSummarizeLong(config, transcript, detailLevel, persona, chapters = [], outputLanguage = 'English', onProgress) {
   const maxChars = (config.contextWindow ? config.contextWindow * 3.0 : 15000);
   const chunks = chunkTranscript(transcript, maxChars);
   
   if (chunks.length <= 1) {
-    return llmSummarize(config, transcript, detailLevel, persona, chapters);
+    return llmSummarize(config, transcript, detailLevel, persona, chapters, outputLanguage);
   }
 
-  if (onProgress) onProgress(`Video je dugačak. Delim na ${chunks.length} delova...`);
+  if (onProgress) onProgress(`Video is long. Splitting into ${chunks.length} chunks...`);
 
   // 1. MAP faza: Sažmi svaki chunk
   const partialSummaries = [];
   let totalUsage = { promptTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCost: 0 };
 
   for (let i = 0; i < chunks.length; i++) {
-    if (onProgress) onProgress(`Obrađujem deo ${i + 1} od ${chunks.length}...`);
+    if (onProgress) onProgress(`Processing chunk ${i + 1} of ${chunks.length}...`);
     const taskSpec = {
       instruction: `Ovo je deo ${i + 1} transkripta. Napravi veoma sažet ali informativan rezime ovog dela u buletima.`,
-      persona: "standard"
+      persona: "standard",
+      outputLanguage
     };
     const res = await llmTask(config, chunks[i], taskSpec);
     partialSummaries.push(res.text);
@@ -257,12 +262,13 @@ async function llmSummarizeLong(config, transcript, detailLevel, persona, chapte
   }
 
   // 2. REDUCE faza: Finalni sažetak
-  if (onProgress) onProgress("Spajam delove u finalni sažetak...");
+  if (onProgress) onProgress("Merging chunks into final summary...");
   const combinedText = partialSummaries.join("\n\n--- DEO ---\n\n");
   const finalTaskSpec = {
     instruction: `Evo sažetaka različitih delova jednog videa. Na osnovu njih napravi finalni, koherentan i strukturiran sažetak celog videa. ${DETAIL_PROMPTS[detailLevel]}`,
     persona,
-    chapters // Prosleđujemo poglavlja u finalnu fazu radi strukture
+    chapters, // Prosleđujemo poglavlja u finalnu fazu radi strukture
+    outputLanguage
   };
   
   const finalRes = await llmTask(config, combinedText, finalTaskSpec);
@@ -276,29 +282,36 @@ async function llmSummarizeLong(config, transcript, detailLevel, persona, chapte
   return finalRes;
 }
 
-function llmExtractEntities(config, transcript) {
+function llmExtractEntities(config, transcript, outputLanguage = 'English') {
   return llmTask(config, transcript, {
     instruction: `Izvuci listu Alata, Tehnologija, Lokacija ili Osoba koji se pominju u videu. Vrati rezultat ISKLJUČIVO kao validan JSON niz stringova (npr. ["Alat 1", "Osoba 2"]). Ne piši nikakav drugi tekst.`,
     userMessage: "Generiši JSON.",
-    parseAs: 'json'
+    parseAs: 'json',
+    outputLanguage
   }).then(result => {
     try { return JSON.parse(result.text); }
     catch { console.error("Entity parse failed"); return []; }
   });
 }
 
-function llmQuiz(config, transcript) {
+function llmQuiz(config, transcript, outputLanguage = 'English') {
   return llmTask(config, transcript, {
     instruction: `Na osnovu ovog transkripta, generiši 3 do 5 pitanja sa višestrukim izborom kako bih proverio znanje. Vrati rezultat ISKLJUČIVO kao validan JSON niz objekata u sledećem formatu: [{"question": "Tekst pitanja", "options": ["A", "B", "C"], "answerIndex": 0}]. Ne piši nikakav dodatni tekst ili markdown.`,
     userMessage: "Generiši JSON kviz.",
-    parseAs: 'json'
+    parseAs: 'json',
+    outputLanguage
   });
 }
 
-function llmChat(config, transcript, history, userMessage) {
+function llmChat(config, transcript, history, userMessage, outputLanguage = 'English') {
   return llmTask(config, transcript, {
-    instruction: `Odgovaraj na pitanja korisnika na osnovu ovog transkripta na srpskom jeziku. Zadrži format [MM:SS] ako citiraš deo videa.`,
+    instruction: `Odgovaraj na pitanja korisnika na osnovu ovog transkripta na ${outputLanguage} jeziku. Zadrži format [MM:SS] ako citiraš deo videa.`,
     userMessage,
-    history
+    history,
+    outputLanguage
   });
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { buildSystemInstruction, chunkTranscript };
 }

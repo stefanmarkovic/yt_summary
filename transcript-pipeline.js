@@ -28,13 +28,13 @@ async function getProcessedTranscript(tabId, videoId) {
 
   // 2. Obrada rezultata iz MAIN world-a
   const scriptResult = results[0]?.result;
-  if (!scriptResult) throw new Error("executeScript nije vratio rezultat.");
+  if (!scriptResult) throw new Error("executeScript did not return a result.");
 
   const debugLines = scriptResult.debugLines || [];
   if (scriptResult.status === 'error') throw new Error(scriptResult.error);
 
   const segments = scriptResult.segments;
-  if (!segments || segments.length === 0) throw new Error("Nema segmenata u transkriptu.");
+  if (!segments || segments.length === 0) throw new Error("No segments in transcript.");
   
   const chapters = scriptResult.chapters || [];
 

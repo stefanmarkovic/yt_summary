@@ -1,0 +1,44 @@
+{
+  "env": {
+    "browser": true,
+    "webextensions": true,
+    "es2021": true,
+    "jest/globals": true,
+    "node": true
+  },
+  "extends": [
+    "eslint:recommended",
+    "plugin:jest/recommended"
+  ],
+  "parserOptions": {
+    "ecmaVersion": 12,
+    "sourceType": "module"
+  },
+  "rules": {
+    "no-unused-vars": "warn",
+    "no-empty": "warn",
+    "no-undef": "error"
+  },
+  "globals": {
+    "browser": "readonly",
+    "setSafeHTML": "readonly",
+    "markdownToHtml": "readonly",
+    "llmChat": "readonly",
+    "llmSummarizeLong": "readonly",
+    "llmExtractEntities": "readonly",
+    "llmQuiz": "readonly",
+    "localizePage": "readonly",
+    "getLocalizedString": "readonly",
+    "getProcessedTranscript": "readonly",
+    "initChat": "readonly",
+    "handleGenerateQuiz": "readonly",
+    "fetchTranscriptInPageContext": "readonly",
+    "I18N": "readonly",
+    "buildSystemInstruction": "readonly",
+    "chunkTranscript": "readonly"
+  },
+  "ignorePatterns": [
+    "node_modules/",
+    "tests/"
+  ]
+}

@@ -77,7 +77,7 @@ async function fetchTranscriptInPageContext(videoId) {
     if (window.ytInitialPlayerResponse) {
       const responseVideoId = window.ytInitialPlayerResponse.videoDetails?.videoId;
       if (responseVideoId && responseVideoId !== videoId) {
-        dbg(`M1: stale data (${responseVideoId} != ${videoId}), preskačem`);
+        dbg(`M1: stale data (${responseVideoId} != ${videoId}), skipping`);
       } else {
         const ct = window.ytInitialPlayerResponse.captions?.playerCaptionsTracklistRenderer?.captionTracks;
         if (ct?.length) {
@@ -102,7 +102,7 @@ async function fetchTranscriptInPageContext(videoId) {
       dbg(`M1: HTTP ${resp.status} CT=${resp.headers.get('content-type')||'?'} len=${txt.length}`);
       if (resp.ok && txt.length > 50) {
         const segments = parseXmlToSegments(txt);
-        dbg(`M1: ${segments.length} segmenata parsirano`);
+        dbg(`M1: ${segments.length} segments parsed`);
         if (segments.length > 0) return segments;
       }
     } catch (e) { dbg(`M1 err: ${e.message}`); }
@@ -111,7 +111,7 @@ async function fetchTranscriptInPageContext(videoId) {
 
   // ======= Strategija 2: /get_transcript iz MAIN world-a =======
   async function tryInnerTube() {
-    dbg("M2: /get_transcript iz MAIN world");
+    dbg("M2: /get_transcript from MAIN world");
     let transcriptParams = null;
     if (window.ytInitialData?.engagementPanels) {
       for (const panel of window.ytInitialData.engagementPanels) {
@@ -120,7 +120,7 @@ async function fetchTranscriptInPageContext(videoId) {
           const endpoint = r.content?.continuationItemRenderer?.continuationEndpoint?.getTranscriptEndpoint;
           if (endpoint?.params) {
             transcriptParams = endpoint.params;
-            dbg(`M2: params pronađeni (${transcriptParams.substring(0, 30)}...)`);
+            dbg(`M2: params found (${transcriptParams.substring(0, 30)}...)`);
           }
           break;
         }
@@ -128,7 +128,7 @@ async function fetchTranscriptInPageContext(videoId) {
     }
 
     if (!transcriptParams) {
-      dbg("M2: params nisu pronađeni u ytInitialData");
+      dbg("M2: params not found in ytInitialData");
       return null;
     }
 
@@ -171,7 +171,7 @@ async function fetchTranscriptInPageContext(videoId) {
           }
         }
       }
-      dbg(`M2: ${segments.length} segmenata`);
+      dbg(`M2: ${segments.length} segments`);
       return segments.length > 0 ? segments : null;
     } catch (e) {
       dbg(`M2 err: ${e.message}`);
@@ -184,7 +184,7 @@ async function fetchTranscriptInPageContext(videoId) {
     dbg("M3: DOM scraping");
 
     // Strategija A: Transcript dugme u opisu videa
-    dbg("M3-A: transcript button u opisu");
+    dbg("M3-A: transcript button in description");
     try {
       const expandBtns = document.querySelectorAll(
         'tp-yt-paper-button#expand, #description-inline-expander tp-yt-paper-button, ' +
@@ -199,22 +199,22 @@ async function fetchTranscriptInPageContext(videoId) {
         'ytd-video-description-transcript-section-renderer #button'
       );
       if (descTranscriptBtn) {
-        dbg("M3-A: klik na transcript dugme u opisu");
+        dbg("M3-A: click on transcript button in description");
         descTranscriptBtn.click();
         await waitForEl('ytd-transcript-segment-renderer', 5000);
       } else {
-        dbg("M3-A: nema transcript dugmeta u opisu");
+        dbg("M3-A: no transcript button in description");
       }
     } catch (e) { dbg(`M3-A err: ${e.message}`); }
 
     let transcriptSegs = document.querySelectorAll('ytd-transcript-segment-renderer');
     if (transcriptSegs.length > 0) {
-      dbg(`M3: pronađeno ${transcriptSegs.length} segmenata`);
+      dbg(`M3: found ${transcriptSegs.length} segments`);
       return readTranscriptFromDOM(transcriptSegs);
     }
 
     // Strategija B: Tri-tačke meni → "Show transcript"
-    dbg("M3-B: tri-tačke meni");
+    dbg("M3-B: three-dot menu");
     try {
       const menuSelectors = [
         'ytd-watch-metadata ytd-menu-renderer yt-icon-button',
@@ -231,7 +231,7 @@ async function fetchTranscriptInPageContext(videoId) {
         menuBtn = null;
       }
       if (menuBtn) {
-        dbg("M3-B: klik na meni dugme");
+        dbg("M3-B: click on menu button");
         menuBtn.click();
         await new Promise(r => setTimeout(r, 800));
 
@@ -240,13 +240,13 @@ async function fetchTranscriptInPageContext(videoId) {
           'ytd-menu-popup-renderer tp-yt-paper-item, ' +
           'ytd-popup-container ytd-menu-service-item-renderer'
         );
-        dbg(`M3-B: ${menuItems.length} stavki u meniju`);
+        dbg(`M3-B: ${menuItems.length} items in menu`);
 
         let found = false;
         for (const item of menuItems) {
           const txt = (item.textContent || '').toLowerCase();
           if (txt.includes('transcript') || txt.includes('transkript') || txt.includes('prepis')) {
-            dbg(`M3-B: klik na "${item.textContent.trim().substring(0, 30)}"`);
+            dbg(`M3-B: click on "${item.textContent.trim().substring(0, 30)}"`);
             item.click();
             found = true;
             break;
@@ -258,17 +258,17 @@ async function fetchTranscriptInPageContext(videoId) {
           if (segEl) {
             await new Promise(r => setTimeout(r, 1000));
             transcriptSegs = document.querySelectorAll('ytd-transcript-segment-renderer');
-            dbg(`M3-B: ${transcriptSegs.length} segmenata`);
+            dbg(`M3-B: ${transcriptSegs.length} segments`);
             if (transcriptSegs.length > 0) return readTranscriptFromDOM(transcriptSegs);
           } else {
-            dbg("M3-B: segmenti se nisu pojavili");
+            dbg("M3-B: segments did not appear");
           }
         } else {
           document.body.click();
-          dbg("M3-B: transcript opcija nije pronađena");
+          dbg("M3-B: transcript option not found");
         }
       } else {
-        dbg("M3-B: meni dugme nije pronađeno");
+        dbg("M3-B: menu button not found");
       }
     } catch (e) { dbg(`M3-B err: ${e.message}`); }
 
@@ -284,12 +284,12 @@ async function fetchTranscriptInPageContext(videoId) {
           await new Promise(r => setTimeout(r, 2000));
           transcriptSegs = panel.querySelectorAll('ytd-transcript-segment-renderer');
           if (transcriptSegs.length > 0) {
-            dbg(`M3-C: ${transcriptSegs.length} segmenata iz panela`);
+            dbg(`M3-C: ${transcriptSegs.length} segments from panel`);
             return readTranscriptFromDOM(transcriptSegs);
           }
         }
       }
-      dbg(`M3-C: ${panels.length} panela, nijedan sa transkriptom`);
+      dbg(`M3-C: ${panels.length} panels, none with transcript`);
     } catch (e) { dbg(`M3-C err: ${e.message}`); }
 
     return null;
@@ -316,7 +316,7 @@ async function fetchTranscriptInPageContext(videoId) {
   // ======= Glavni fallback loop =======
   try {
     const chapters = getChapters();
-    if (chapters.length > 0) dbg(`Pronađeno ${chapters.length} poglavlja`);
+    if (chapters.length > 0) dbg(`Found ${chapters.length} chapters`);
 
     for (const strategy of [tryBaseUrl, tryInnerTube, tryDomScraping]) {
       const segments = await strategy();
@@ -324,7 +324,7 @@ async function fetchTranscriptInPageContext(videoId) {
         return { status: 'ok', segments, chapters, debugLines: D };
       }
     }
-    return { status: 'error', error: 'Svi metodi neuspešni.', debugLines: D };
+    return { status: 'error', error: 'All methods failed.', debugLines: D };
   } catch (e) {
     return { status: 'error', error: e.message, debugLines: D };
   }

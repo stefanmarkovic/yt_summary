@@ -15,7 +15,7 @@ function markdownToHtml(md) {
   html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n');
   html = html.replace(/^---$/gm, '<hr>');
   html = html.replace(/^\d+\. (.+)$/gm, '<OLI>$1</OLI>');
-  html = html.replace(/^[\*\-] (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/^[-*] (.+)$/gm, '<li>$1</li>');
   html = html.replace(/((<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
   html = html.replace(/((<OLI>.*<\/OLI>\n?)+)/g, (match) =>
     '<ol>' + match.replace(/OLI/g, 'li') + '</ol>');

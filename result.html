@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<html lang="sr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>YT Summary AI — Sažetak</title>
+  <title data-i18n="result_title">Video Summary</title>
   <link rel="stylesheet" href="result.css">
 </head>
 <body>
   <div id="loading" class="loading">
     <div class="spinner"></div>
-    <div class="loading-text">Učitavam sažetak...</div>
+    <div class="loading-text" data-i18n="result_loading">Loading summary...</div>
   </div>
 
   <div id="page" style="display:none;">
@@ -16,9 +16,9 @@
       <div class="container">
         <div class="badge">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-          AI Sažetak
+          <span data-i18n="result_badge">AI Summary</span>
         </div>
-        <h1 id="video-title">Video sažetak</h1>
+        <h1 id="video-title" data-i18n="result_title">Video Summary</h1>
         <div class="meta">
           <span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -32,28 +32,43 @@
         <div class="toolbar">
           <button id="copy-md-btn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-            <span class="btn-text">Kopiraj Markdown</span>
+            <span class="btn-text" data-i18n="btn_copy_md">Copy Markdown</span>
           </button>
           <button id="copy-text-btn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
-            <span class="btn-text">Kopiraj tekst</span>
+            <span class="btn-text" data-i18n="btn_copy_text">Copy Text</span>
+          </button>
+          <button id="export-html-btn">
+            <span class="btn-text" data-i18n="btn_export_html">HTML</span>
+          </button>
+          <button id="export-pdf-btn">
+            <span class="btn-text" data-i18n="btn_export_pdf">PDF</span>
+          </button>
+          <button id="export-notion-btn">
+            <span class="btn-text" data-i18n="btn_export_notion">Notion</span>
           </button>
         </div>
 
         <div class="detail-buttons">
-          <span class="detail-label">Detaljnost:</span>
-          <button id="detail-short" class="detail-btn" data-level="1">Kratko</button>
-          <button id="detail-medium" class="detail-btn active" data-level="2">Srednje</button>
-          <button id="detail-detailed" class="detail-btn" data-level="3">Detaljno</button>
+          <span class="detail-label" data-i18n="detail_level">Detail level:</span>
+          <button id="detail-short" class="detail-btn" data-level="1" data-i18n="detail_short">Short</button>
+          <button id="detail-medium" class="detail-btn active" data-level="2" data-i18n="detail_medium">Medium</button>
+          <button id="detail-detailed" class="detail-btn" data-level="3" data-i18n="detail_detailed">Detailed</button>
         </div>
       </div>
     </div>
 
     <div class="content">
       <div class="container">
+        <div id="tldr-container" class="info-card tldr-card" style="display:none; padding:12px; margin-bottom:15px; border-radius:6px; background:rgba(255, 215, 0, 0.1); border:1px solid rgba(255, 215, 0, 0.3);">
+          <h4 style="margin:0 0 5px 0; font-size:14px; color:#ffd700;" data-i18n="tldr_title">TL;DR:</h4>
+          <p id="tldr-text" style="margin:0; font-size:13px; line-height:1.4; color:white;"></p>
+        </div>
+        <div id="word-cloud-container" class="info-card word-cloud-card" style="display:none; padding:12px; margin-bottom:15px; border-radius:6px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); text-align:center;">
+        </div>
         <div id="summary" class="summary"></div>
         <div id="entity-info" class="info-card entity-card" style="display:none; padding:12px; margin-bottom:15px; border-radius:6px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1);">
-          <h4 style="margin:0 0 10px 0; font-size:13px; color:#aaa;">Pomenuti Entiteti:</h4>
+          <h4 style="margin:0 0 10px 0; font-size:13px; color:#aaa;" data-i18n="entity_title">Mentioned Entities:</h4>
           <div id="entity-tags" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
         </div>
         <div id="sponsor-info" class="info-card sponsor-card"></div>
@@ -61,22 +76,23 @@
 
         <div class="chat-section">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-            <h2 class="chat-title" style="margin: 0;">Pitaj AI o videu</h2>
+            <h2 class="chat-title" style="margin: 0;" data-i18n="chat_title">Ask AI about the video</h2>
             <div style="display: flex; gap: 8px;">
-              <button id="download-transcript-btn" class="secondary" style="font-size: 12px; padding: 6px 12px; border-radius: 4px; background: rgba(255,255,255,0.1); border: none; color: white; cursor: pointer;">📝 Preuzmi transkript</button>
-              <button id="generate-quiz-btn" class="secondary" style="font-size: 12px; padding: 6px 12px; border-radius: 4px; background: rgba(255,255,255,0.1); border: none; color: white; cursor: pointer;">🎲 Generiši kviz</button>
+              <button id="download-transcript-btn" class="secondary" style="font-size: 12px; padding: 6px 12px; border-radius: 4px; background: rgba(255,255,255,0.1); border: none; color: white; cursor: pointer;" data-i18n="btn_download_transcript">📝 Download Transcript</button>
+              <button id="generate-quiz-btn" class="secondary" style="font-size: 12px; padding: 6px 12px; border-radius: 4px; background: rgba(255,255,255,0.1); border: none; color: white; cursor: pointer;" data-i18n="btn_generate_quiz">🎲 Generate Quiz</button>
             </div>
           </div>
           <div id="chat-messages" class="chat-messages"></div>
           <div class="chat-input-area">
-            <textarea id="chat-input" placeholder="Postavi pitanje o videu..." rows="2"></textarea>
-            <button id="chat-send-btn" class="chat-send-btn">Pošalji</button>
+            <textarea id="chat-input" data-i18n="chat_placeholder" placeholder="Ask a question about the video..." rows="2"></textarea>
+            <button id="chat-send-btn" class="chat-send-btn" data-i18n="btn_chat_send">Send</button>
           </div>
         </div>
       </div>
     </div>
   </div>
 
+  <script src="i18n.js"></script>
   <script src="gemini.js"></script>
   <script src="markdown-renderer.js"></script>
   <script src="chat.js"></script>
