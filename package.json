@@ -3,7 +3,7 @@
   "version": "4.4.0",
   "description": "AI sažetak YouTube videa",
   "scripts": {
-    "package": "web-ext build --overwrite-dest",
+    "package": "npm run package:ps",
     "package:ps": "powershell -ExecutionPolicy Bypass -File package.ps1",
     "lint": "web-ext lint",
     "lint:js": "eslint .",

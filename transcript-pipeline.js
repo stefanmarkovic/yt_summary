@@ -5,7 +5,12 @@
 
 async function getSponsorSegments(videoId) {
   try {
-    const resp = await fetch(`https://sponsor.ajay.app/api/skipSegments?videoID=${videoId}&categories=["sponsor","selfpromo","interaction","intro","outro"]`);
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), 1500);
+    const resp = await fetch(`https://sponsor.ajay.app/api/skipSegments?videoID=${videoId}&categories=["sponsor","selfpromo","interaction","intro","outro"]`, {
+      signal: controller.signal
+    });
+    clearTimeout(id);
     return resp.ok ? await resp.json() : [];
   } catch { return []; }
 }
@@ -29,14 +34,26 @@ async function getProcessedTranscript(tabId, videoId) {
 
   // 2. Obrada rezultata iz MAIN world-a
   const scriptResult = results[0]?.result;
-  if (!scriptResult) throw new Error("executeScript did not return a result.");
+  if (!scriptResult) {
+    const err = new Error("executeScript did not return a result.");
+    err.debugLines = [];
+    throw err;
+  }
 
   const debugLines = scriptResult.debugLines || [];
-  if (scriptResult.status === 'error') throw new Error(scriptResult.error);
+  if (scriptResult.status === 'error') {
+    const err = new Error(scriptResult.error || "All methods failed.");
+    err.debugLines = debugLines;
+    throw err;
+  }
 
   const segments = scriptResult.segments;
-  if (!segments || segments.length === 0) throw new Error("No segments in transcript.");
-  
+  if (!segments || segments.length === 0) {
+    const err = new Error("No segments in transcript.");
+    err.debugLines = debugLines;
+    throw err;
+  }
+
   const chapters = scriptResult.chapters || [];
 
   // 3. SponsorBlock filtriranje

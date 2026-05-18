@@ -302,24 +302,37 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       const [{ result: videoIds }] = await browser.scripting.executeScript({
         target: { tabId: tab.id },
+        world: "MAIN",
         func: () => {
           const ids = new Set();
           try {
-            const panels = window.ytInitialData?.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents?.[0]?.playlistVideoListRenderer?.contents;
-            if (panels) {
-              for (const item of panels) {
+            // 1. Ako smo na /playlist?list=... stranici
+            const browsePlaylist = window.ytInitialData?.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents?.[0]?.playlistVideoListRenderer?.contents;
+            if (browsePlaylist) {
+              for (const item of browsePlaylist) {
                 if (item.playlistVideoRenderer?.videoId) {
                   ids.add(item.playlistVideoRenderer.videoId);
                 }
               }
             }
-            document.querySelectorAll('a.ytd-playlist-panel-video-renderer, a.ytd-playlist-video-renderer').forEach(a => {
-              const v = new URLSearchParams(a.search).get('v');
+            // 2. Ako smo na /watch?v=...&list=... stranici sa panelom sa strane
+            const watchPlaylist = window.ytInitialData?.contents?.twoColumnWatchNextResults?.playlist?.playlist?.contents;
+            if (watchPlaylist) {
+              for (const item of watchPlaylist) {
+                if (item.playlistPanelVideoRenderer?.videoId) {
+                  ids.add(item.playlistPanelVideoRenderer.videoId);
+                }
+              }
+            }
+            // 3. Fallback preko DOM a (provera za oba tipa linkova)
+            document.querySelectorAll('a.ytd-playlist-panel-video-renderer, a.ytd-playlist-video-renderer, ytd-playlist-video-renderer a#video-title, ytd-playlist-panel-video-renderer a#wc-endpoint').forEach(a => {
+              const href = a.getAttribute('href') || a.search || '';
+              const v = new URLSearchParams(href.includes('?') ? href.split('?')[1] : href).get('v');
               if (v) ids.add(v);
             });
-            // Try url params
+            // 4. Bar trenutni video iz URL-a ako ništa drugo ne upali
             const v = new URLSearchParams(window.location.search).get('v');
-            if (v && ids.size === 0) ids.add(v); // At least the current one
+            if (v && ids.size === 0) ids.add(v);
           } catch (e) { console.warn("Error scraping playlist IDs:", e); }
           return Array.from(ids);
         }
@@ -336,6 +349,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       const detail = document.getElementById('detail-level').value;
       const persona = resolvePersona(document.getElementById('persona-level').value, customPrompts);
       const outputLang = config.outputLanguage || 'English';
+
+      // Sačuvaj trenutne logove pre otvaranja playlist.html
+      await browser.storage.local.set({ yt_debug_logs: debugLog.value });
 
       await browser.storage.local.set({
         batch_job: {
@@ -421,6 +437,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       };
 
       await browser.storage.local.set({ yt_summary_result: finalResult });
+      await browser.storage.local.set({ yt_debug_logs: debugLog.value });
       await browser.tabs.create({ url: browser.runtime.getURL('result.html') });
 
       statusDiv.innerText = "Gotovo! Sažetak otvoren u novom tabu.";
@@ -428,8 +445,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     } catch (error) {
       log(`ERROR: ${error.message}`);
+      if (error.debugLines && error.debugLines.length > 0) {
+        for (const line of error.debugLines) {
+          log(`  [PAGE] ${line}`);
+        }
+      }
       log(`Stack: ${error.stack?.substring(0, 300) || 'N/A'}`);
       statusDiv.innerText = "Greška: " + error.message;
+      await browser.storage.local.set({ yt_debug_logs: debugLog.value });
     } finally {
       summarizeBtn.disabled = false;
     }

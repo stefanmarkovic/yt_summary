@@ -258,6 +258,17 @@ ${markdownToHtml(currentResult?.summary || '')}
       }
     });
 
+    // Učitaj perzistentne logove iz skladišta
+    const debugData = await browser.storage.local.get('yt_debug_logs');
+    if (debugData.yt_debug_logs) {
+      const debugContainer = document.getElementById('debug-section');
+      const debugTextArea = document.getElementById('result-debug-log');
+      if (debugContainer && debugTextArea) {
+        debugTextArea.value = debugData.yt_debug_logs;
+        debugContainer.style.display = 'block';
+      }
+    }
+
   } catch (e) {
     document.getElementById('loading').replaceChildren();
     const errorMsg = document.createElement('div');
