@@ -8,6 +8,15 @@ async function fetchTranscriptInPageContext(videoId) {
   const D = [];
   function dbg(msg) { D.push(msg); }
 
+  function stripHtmlTags(input) {
+    let previous;
+    do {
+      previous = input;
+      input = input.replace(/<[^>]*>/g, '');
+    } while (input !== previous);
+    return input.replace(/<|>/g, '');
+  }
+
   function parseCaptions(text) {
     // 1. Probaj kao JSON
     try {
@@ -43,15 +52,15 @@ async function fetchTranscriptInPageContext(videoId) {
       const startSec = startMatch ? parseFloat(startMatch[1]) : 0;
       const durSec = durMatch ? parseFloat(durMatch[1]) : 0;
       
-      t = t
+      t = stripHtmlTags(t)
         .replace(/&amp;/g, '&')
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"')
         .replace(/&#39;/g, "'")
-        .replace(/&apos;/g, "'");
-        
-      t = t.replace(/<[^>]*>/g, '').trim();
+        .replace(/&apos;/g, "'")
+        .trim();
+
       if (t) {
         segments.push({ text: t, startSec, durSec });
       }
