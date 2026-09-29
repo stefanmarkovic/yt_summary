@@ -11,47 +11,57 @@ function downloadAsFile(content, filename, mimeType) {
   URL.revokeObjectURL(url);
 }
 
-function copyWithFeedback(button, text) {
-  navigator.clipboard.writeText(text).then(() => {
+async function copyWithFeedback(button, text) {
+  if (button.disabled) return;
+  button.disabled = true;
+  try {
+    await navigator.clipboard.writeText(text);
     button.classList.add('copied');
     const btnText = button.querySelector('.btn-text');
     const original = btnText.textContent;
-    btnText.textContent = '\u2713 Copied!';
+    btnText.textContent = getLocalizedString('btn_copied', currentConfig?.uiLanguage || 'en');
     setTimeout(() => {
       button.classList.remove('copied');
       btnText.textContent = original;
+      button.disabled = false;
     }, 2000);
-  });
+  } catch (error) {
+    button.disabled = false;
+    alert(getLocalizedString('copy_error', currentConfig?.uiLanguage || 'en') + error.message);
+  }
 }
 
 let currentTranscript = "";
 let currentConfig = null;
 let currentResult = null;
+let resultStorageKey = null;
+
+async function saveCurrentResult(result) {
+  if (resultStorageKey) {
+    await browser.storage.session.set({ [resultStorageKey]: { result, transcript: currentTranscript } });
+  }
+  const latest = await browser.storage.local.get('yt_summary_result');
+  if (result.id && latest.yt_summary_result?.id === result.id) {
+    await browser.storage.local.set({ yt_summary_result: result });
+  }
+}
 
 function updateSummaryUI(result) {
   currentResult = result;
-  document.getElementById('video-title').textContent = result.title || 'Video sa\u017eetak';
-  document.title = `Sa\u017eetak: ${result.title || 'Video'}`;
-  document.getElementById('meta-date').textContent = new Date(result.timestamp).toLocaleDateString('sr-Latn-RS', { day: 'numeric', month: 'long', year: 'numeric' });
+  const lang = currentConfig?.uiLanguage || 'en';
+  document.getElementById('video-title').textContent = result.title || getLocalizedString('result_title', lang);
+  document.title = `${getLocalizedString('result_title', lang)}: ${result.title || 'Video'}`;
+  document.getElementById('meta-date').textContent = new Date(result.timestamp).toLocaleDateString(lang, { day: 'numeric', month: 'long', year: 'numeric' });
 
   // Delegate rendering to summary-renderer.js
   const summaryContainer = document.getElementById('summary');
-  const renderResult = renderSummaryCard(summaryContainer, result, currentConfig);
+  const renderResult = renderSummaryCard(summaryContainer, result, { ...currentConfig, model: result.model || currentConfig?.model });
 
-  document.getElementById('meta-words').textContent = `~${renderResult.wordCount} words (${renderResult.readTime} min read)`;
-
-  // TL;DR in dedicated page-level container
-  if (renderResult.tldr) {
-    document.getElementById('tldr-text').textContent = renderResult.tldr;
-    document.getElementById('tldr-container').style.display = 'block';
-  } else {
-    document.getElementById('tldr-container').style.display = 'none';
-  }
-
-  // Hide standalone containers since rendering is now inside #summary
-  document.getElementById('entity-info').style.display = 'none';
-  document.getElementById('sponsor-info').style.display = 'none';
-  document.getElementById('usage-info').style.display = 'none';
+  document.getElementById('meta-words').textContent = getLocalizedString('reading_stats', lang)
+    .replace('{words}', renderResult.wordCount).replace('{minutes}', renderResult.readTime);
+  document.querySelectorAll('.detail-btn').forEach(button => {
+    button.classList.toggle('active', button.dataset.level === (result.detail || '2'));
+  });
 }
 
 function generateWordCloud(transcript) {
@@ -102,7 +112,7 @@ function generateWordCloud(transcript) {
 }
 
 async function regenerateSummary(level) {
-  if (!currentTranscript || !currentConfig) return;
+  if (!currentTranscript || !currentConfig || document.querySelector('.detail-btn:disabled')) return;
 
   const buttons = document.querySelectorAll('.detail-btn');
   buttons.forEach(b => b.disabled = true);
@@ -110,21 +120,23 @@ async function regenerateSummary(level) {
   summaryEl.style.opacity = '0.5';
 
   try {
-    const storageData = await browser.storage.local.get('yt_summary_result');
-    const chapters = storageData.yt_summary_result?.chapters || [];
+    const sourceResult = currentResult;
+    const chapters = sourceResult.chapters || [];
     
     // Za regeneraciju koristimo istu llmSummarizeLong logiku
-    const outputLang = currentConfig.outputLanguage || 'English';
-    const result = await llmSummarizeLong(currentConfig, currentTranscript, level, "standard", chapters, outputLang);
+    const outputLang = sourceResult.outputLang || currentConfig.outputLanguage || 'English';
+    const result = await llmSummarizeLong(currentConfig, currentTranscript, level, sourceResult.persona || 'standard', chapters, outputLang);
 
     const newResult = {
-      ...storageData.yt_summary_result,
+      ...sourceResult,
       summary: result.text,
       usage: result.usage,
+      model: currentConfig.model,
+      detail: level,
       timestamp: Date.now()
     };
 
-    await browser.storage.local.set({ yt_summary_result: newResult });
+    await saveCurrentResult(newResult);
     updateSummaryUI(newResult);
 
     buttons.forEach(b => {
@@ -133,7 +145,7 @@ async function regenerateSummary(level) {
     });
 
   } catch (e) {
-    alert("Gre\u0161ka pri regeneraciji: " + e.message);
+    alert(getLocalizedString('regenerate_error', currentConfig?.uiLanguage || 'en') + e.message);
   } finally {
     buttons.forEach(b => b.disabled = false);
     summaryEl.style.opacity = '1';
@@ -148,11 +160,14 @@ function handleDownloadTranscript() {
 async function init() {
   try {
     const localData = await browser.storage.local.get(['yt_summary_result', 'llm_config']);
-    const sessionData = await browser.storage.session.get('yt_transcript');
-
-    const result = localData.yt_summary_result;
+    const resultId = new URLSearchParams(window.location.search).get('id');
+    resultStorageKey = resultId ? `yt_result_${resultId}` : null;
+    const sessionData = await browser.storage.session.get(resultStorageKey || 'yt_transcript');
+    const snapshot = resultStorageKey ? sessionData[resultStorageKey] : null;
+    const result = resultStorageKey ? snapshot?.result : localData.yt_summary_result;
     currentConfig = localData.llm_config;
-    currentTranscript = sessionData.yt_transcript;
+    // Legacy pages have no reliable association between transcript and summary.
+    currentTranscript = snapshot?.transcript || '';
 
     if (currentConfig && typeof localizePage === 'function') {
       localizePage(currentConfig.uiLanguage || 'en');
@@ -162,7 +177,7 @@ async function init() {
       document.getElementById('loading').replaceChildren();
       const errorMsg = document.createElement('div');
       errorMsg.className = 'loading-text';
-      errorMsg.textContent = typeof getLocalizedString === 'function' ? getLocalizedString('status_error', currentConfig?.uiLanguage || 'en') + ' No data to display.' : 'No data to display.';
+      errorMsg.textContent = getLocalizedString('no_result', currentConfig?.uiLanguage || 'en');
       document.getElementById('loading').appendChild(errorMsg);
       return;
     }
@@ -172,6 +187,9 @@ async function init() {
 
     document.getElementById('loading').style.display = 'none';
     document.getElementById('page').style.display = 'block';
+    document.querySelectorAll('.detail-btn').forEach(button => { button.disabled = !currentTranscript || !currentConfig; });
+    document.getElementById('generate-quiz-btn').disabled = !currentTranscript || !currentConfig;
+    document.getElementById('download-transcript-btn').disabled = !currentTranscript;
 
     // Detail buttons
     document.querySelectorAll('.detail-btn').forEach(btn => {
@@ -218,15 +236,18 @@ ${markdownToHtml(currentResult?.summary || '')}
     });
 
     // Copy buttons
-    document.getElementById('copy-md-btn').addEventListener('click', async function() {
-      const data = await browser.storage.local.get('yt_summary_result');
-      copyWithFeedback(this, data.yt_summary_result.summary);
+    document.getElementById('copy-md-btn').addEventListener('click', function() {
+      copyWithFeedback(this, currentResult.summary);
     });
 
     document.getElementById('copy-text-btn').addEventListener('click', async function() {
       const tempDiv = document.createElement('div');
-      setSafeHTML(tempDiv, document.getElementById('summary').innerHTML);
-      const plain = tempDiv.textContent.replace(/\n{3,}/g, '\n\n');
+      setSafeHTML(tempDiv, markdownToHtml(currentResult.summary));
+      tempDiv.querySelectorAll('p,li,h1,h2,h3,blockquote,pre').forEach(node => {
+        node.appendChild(document.createTextNode('\n'));
+      });
+      tempDiv.querySelectorAll('br').forEach(node => node.replaceWith(document.createTextNode('\n')));
+      const plain = tempDiv.textContent.replace(/\n{3,}/g, '\n\n').trim();
       copyWithFeedback(this, plain);
     });
 
@@ -236,27 +257,14 @@ ${markdownToHtml(currentResult?.summary || '')}
         const outputLang = currentConfig.outputLanguage || 'English';
         const entities = await llmExtractEntities(currentConfig, currentTranscript, outputLang);
         if (entities && entities.length > 0) {
-          const data = await browser.storage.local.get('yt_summary_result');
-          if (data.yt_summary_result) {
-            data.yt_summary_result.entities = entities;
-            await browser.storage.local.set({ yt_summary_result: data.yt_summary_result });
-            updateSummaryUI(data.yt_summary_result);
-          }
+          const updatedResult = { ...currentResult, entities };
+          await saveCurrentResult(updatedResult);
+          updateSummaryUI(updatedResult);
         }
       } catch (err) {
         console.error("Entity extraction failed:", err.message);
       }
     }
-
-    // Handle external storage updates (e.g. from another tab)
-    browser.storage.onChanged.addListener((changes, area) => {
-      if (area === 'local' && changes.yt_summary_result) {
-        const newVal = changes.yt_summary_result.newValue;
-        if (newVal && newVal.entities && (!currentResult || !currentResult.entities)) {
-           updateSummaryUI(newVal);
-        }
-      }
-    });
 
     // Učitaj perzistentne logove iz skladišta
     const debugData = await browser.storage.local.get('yt_debug_logs');
@@ -273,9 +281,13 @@ ${markdownToHtml(currentResult?.summary || '')}
     document.getElementById('loading').replaceChildren();
     const errorMsg = document.createElement('div');
     errorMsg.className = 'loading-text';
-    errorMsg.textContent = `Gre\u0161ka: ${e.message}`;
+    errorMsg.textContent = getLocalizedString('status_error', currentConfig?.uiLanguage || 'en') + e.message;
     document.getElementById('loading').appendChild(errorMsg);
   }
 }
 
-init();
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { init, regenerateSummary, copyWithFeedback, generateWordCloud };
+} else {
+  init();
+}

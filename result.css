@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
@@ -63,6 +61,7 @@ h1 {
 
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 1.25rem;
 }
@@ -202,6 +201,13 @@ h1 {
   display: none;
 }
 
+.summary .info-card { display: block; }
+.summary pre { overflow-x: auto; white-space: pre; padding: 12px; }
+.quiz-question { margin: 15px 0; }
+.quiz-question label { display: block; cursor: pointer; margin: 4px 0; }
+.quiz-question p { font-weight: 600; margin-bottom: 8px; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .sponsor-card {
   background: rgba(52, 211, 153, 0.05);
   border: 1px solid rgba(52, 211, 153, 0.1);
@@ -282,6 +288,7 @@ h1 {
 /* Detail buttons */
 .detail-buttons {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   margin-top: 1.5rem;
@@ -400,16 +407,23 @@ h1 {
   body { background: white; color: black; }
   .hero { background: none; padding: 0; border: none; }
   h1 { color: black; margin-bottom: 0.5rem; }
-  .toolbar, .detail-buttons, .chat-section, #loading, .badge { display: none !important; }
+  .toolbar, .detail-buttons, .chat-section, #loading, .badge, #debug-section { display: none !important; }
   .meta { color: #555; }
-  #tldr-container, #word-cloud-container, #entity-info, #sponsor-info, #usage-info { 
+  .info-card {
     page-break-inside: avoid; 
     border: 1px solid #ccc !important; 
     background: transparent !important; 
     color: black !important; 
   }
-  #tldr-container h4, #tldr-text { color: black !important; }
+  .info-card h4, .info-card p, .info-card span, .info-card strong { color: black !important; }
   .summary { color: black; }
   .summary h1, .summary h2, .summary h3, .summary strong { color: black; }
   .summary a { color: black; text-decoration: underline; }
+}
+
+@media (max-width: 600px) {
+  .container { padding: 0 1rem; }
+  .usage-grid { grid-template-columns: repeat(2, 1fr); }
+  .chat-section > div:first-child { flex-wrap: wrap; gap: 12px; }
+  .chat-input-area textarea { min-width: 0; }
 }

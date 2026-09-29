@@ -55,4 +55,25 @@ describe('Phase 3 Advanced Features', () => {
   test('resolvePersona returns original value for invalid custom index', () => {
     expect(resolvePersona('custom_99', [])).toBe('custom_99');
   });
+
+  test('does not confuse a partial custom index or missing persona with a saved prompt', () => {
+    expect(resolvePersona('custom_0junk', [{ text: 'Wrong persona' }])).toBe('custom_0junk');
+    expect(resolvePersona(undefined)).toBe('standard');
+  });
+
+  test('JSON tasks are not instructed to include prose or timestamps', () => {
+    const prompt = buildSystemInstruction('[0:00] A tool', { instruction: 'Return a JSON array only.', parseAs: 'json' });
+    expect(prompt).toContain('Return a JSON array only.');
+    expect(prompt).not.toContain('TL;DR:');
+    expect(prompt).not.toContain('Zadrži postojeće');
+  });
+
+  test('summary format is opt-in and chapters retain their times', () => {
+    const chapters = [{ title: 'Chapter', timeSec: 75 }];
+    const summary = buildSystemInstruction('Transcript', { instruction: 'Summarize', summary: true, chapters });
+    const chat = buildSystemInstruction('Transcript', { instruction: 'Answer the question' });
+    expect(summary).toContain('[1:15] Chapter');
+    expect(summary).toContain('TL;DR:');
+    expect(chat).not.toContain('TL;DR:');
+  });
 });

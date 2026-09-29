@@ -3,12 +3,10 @@
     "browser": true,
     "webextensions": true,
     "es2021": true,
-    "jest/globals": true,
     "node": true
   },
   "extends": [
-    "eslint:recommended",
-    "plugin:jest/recommended"
+    "eslint:recommended"
   ],
   "parserOptions": {
     "ecmaVersion": 12,
@@ -23,6 +21,7 @@
     "browser": "readonly",
     "setSafeHTML": "readonly",
     "markdownToHtml": "readonly",
+    "escapeHtml": "readonly",
     "llmChat": "readonly",
     "llmSummarizeLong": "readonly",
     "llmExtractEntities": "readonly",
@@ -30,6 +29,8 @@
     "localizePage": "readonly",
     "getLocalizedString": "readonly",
     "getProcessedTranscript": "readonly",
+    "getSponsorSegments": "readonly",
+    "processTranscriptSegments": "readonly",
     "initChat": "readonly",
     "handleGenerateQuiz": "readonly",
     "fetchTranscriptInPageContext": "readonly",
@@ -41,10 +42,21 @@
     "resolvePersona": "readonly",
     "renderSummaryCard": "readonly",
     "CATEGORY_LABELS": "readonly",
-    "formatDuration": "readonly"
+    "formatDuration": "readonly",
+    "LLM_PROVIDERS": "readonly",
+    "normalizeLlmConfig": "readonly"
   },
   "ignorePatterns": [
     "node_modules/",
-    "tests/"
+    "tmp/",
+    "coverage/",
+    "web-ext-artifacts/"
+  ],
+  "overrides": [
+    {
+      "files": ["tests/**/*.js"],
+      "extends": ["plugin:jest/recommended"],
+      "env": { "jest/globals": true }
+    }
   ]
 }
