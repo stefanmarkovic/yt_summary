@@ -1,219 +1,94 @@
-# YT Summary AI — Tehnička Dokumentacija
+# YT Summary AI — tehnička dokumentacija
 
-## Opis
+Firefox Manifest V3 ekstenzija, verzija 4.4.1. Nema background worker-a: popup pokreće analizu, a stranice rezultata i liste upravljaju svojim aktivnim zahtevima. Zatvaranje tih stranica može prekinuti posao.
 
-Firefox (Manifest V3) ekstenzija koja:
-1. Preuzima transkript sa YouTube videa (iz page konteksta)
-2. Filtrira sponzorisane segmente pomoću SponsorBlock API-ja
-3. Šalje filtrirani tekst LLM-u (Gemini, DeepSeek, Ollama) za generisanje sažetka na srpskom jeziku
-4. Prikazuje sažetak u novom tabu sa chat funkcionalnostima
+## Granice modula
 
-**Verzija:** 4.3
-**Podrazumevani model:** `gemini-3-flash-preview`
+| Modul | Odgovornost i interfejs |
+| --- | --- |
+| `popup.js` | Podešavanja, validacija YouTube URL-a, pronalaženje ID-jeva liste, pokretanje analize i stvaranje zasebnih session snapshotova. |
+| `transcript-fetcher.js` | Samostalna `fetchTranscriptInPageContext(videoId)`, ubrizgana preko `scripting.executeScript({world: "MAIN"})`; vraća `{status, segments, chapters, debugLines}`. Sva potrebna logika je unutar funkcije jer Firefox serijalizuje funkciju za page kontekst. |
+| `transcript-pipeline.js` | `getProcessedTranscript(tabId, videoId)`, `getSponsorSegments(videoId)` i zajednička `processTranscriptSegments(segments, sponsors, chapters, debugLines)`. Dohvat, validacija, filtriranje, formatiranje i session keš. |
+| `prompts.js` | `buildSystemInstruction(transcript, taskSpec)` i `resolvePersona(value, customPrompts)`. TL;DR je uključen samo za zadatke sa `summary: true`; JSON zadaci ne dobijaju instrukcije za Markdown ili vremenske oznake. |
+| `gemini.js` | Konfiguracija dozvoljenih provajdera, autentifikacija, transport, retry, parsiranje odgovora, potrošnja i zadaci: sažetak, dugi sažetak, entiteti, kviz i chat. |
+| `markdown-renderer.js` | `escapeHtml`, `markdownToHtml`, `setSafeHTML`. Tekst se escape-uje, kod se štiti od Markdown transformacija, a umetnuti HTML se dodatno sanitizuje. |
+| `summary-renderer.js` | Zajednička kartica za rezultat i listu: TL;DR, tekst, entiteti, SponsorBlock statistika, potrošnja i YouTube timestamp linkovi. |
+| `result.js` | Učitava snapshot sa svojim ID-jem; kopiranje, izvoz, regeneracija i izdvajanje entiteta koriste taj rezultat. |
+| `playlist.js` | Direktan dohvat YouTube stranice i InnerTube transkripta; rezervni YouTube prozor; zajedničko filtriranje i renderovanje za svaki video. |
+| `chat.js`, `quiz.js` | Istorija chata i kontrola jednog zahteva; validacija i prikaz kviza sa odvojenim radio grupama. |
+| `i18n.js` | Jezik interfejsa: engleski, srpski, nemački i španski. Jezik AI odgovora je zasebno podešavanje. |
 
----
+## Tok analize
 
-## Struktura Projekta
+1. Popup validira aktivni YouTube URL i video ID.
+2. MAIN funkcija paralelno pokušava captionTracks i InnerTube; DOM pokušaj kreće nakon 150 ms. Prvi uspešan rezultat završava dohvat. Ukupan deadline je 8 s; AbortController zaustavlja mrežu, DOM čekanja i posmatrače preostalih pokušaja.
+3. Podaci player-a se proveravaju prema video ID-ju kako stari SPA podaci ne bi postali transkript novog videa. Parser podržava JSON događaje, XML `text` i timed-text `p` segmente.
+4. SponsorBlock kreće paralelno sa transkriptom. Njegov deadline je 350 ms; mrežna greška, nevalidan odgovor ili nedostupan servis vraćaju praznu listu.
+5. Zajednička obrada odbacuje nevalidne segmente i raspone, sortira titlove, filtrira i dodaje `[MM:SS]` oznake. Prazan rezultat zaustavlja analizu pre AI poziva.
+6. AI transport šalje instrukcije i transkript izabranom provajderu. Rezultat i transkript dobijaju zaseban session ključ; popup otvara stranicu sa ID-jem tog ključa.
 
-```
-yt_summary/
-├── manifest.json            # MV3 manifest (permissions, host_permissions)
-├── popup.html               # Popup UI: API key setup, summarize dugme, debug log
-├── popup.css                # Stilovi popup-a
-├── popup.js                 # Thin orchestrator: startAnalysis pipeline
-├── prompts.js               # Prompt construction: DETAIL/PERSONA_PROMPTS, resolvePersona, buildSystemInstruction
-├── gemini.js                # LLM transport: provider adapters, retry, usage tracking
-├── transcript-fetcher.js    # MAIN world: dohvatanje transkripta (3 strategije)
-├── transcript-pipeline.js   # Konsolidovani pipeline: fetch + SponsorBlock + filtriranje
-├── markdown-renderer.js     # Pure function: markdownToHtml + setSafeHTML
-├── summary-renderer.js      # Reusable summary card rendering (TL;DR, entities, SponsorBlock, usage)
-├── chat.js                  # Chat modul: owns chatHistory internally
-├── quiz.js                  # Quiz modul: generisanje, renderovanje, provera
-├── result.html              # Stranica rezultata
-├── result.css               # Stilovi stranice rezultata
-├── result.js                # Orchestrator rezultata: UI lifecycle, regeneracija, entity extraction
-├── icons/
-│   └── icon-48.png
-└── DOCUMENTATION.md         # Ovaj fajl
-```
+MAIN je glavni kontekst YouTube stranice, sa pristupom njenim promenljivama i cookie-jima; nije izolovani content-script kontekst. Rezervni put liste može otvoriti mali pozadinski YouTube prozor, koji se zatvara u `finally` bloku.
 
----
+## SponsorBlock: izbor teksta i statistika
 
-## Arhitektura — Tok Podataka
+Filtriraju se kategorije `sponsor`, `selfpromo`, `interaction`, `intro` i `outro`. Raspon mora biti numerički, nenegativan i imati kraj posle početka.
 
-```
-YouTube tab                          Popup (popup.js)                     Result (result.html)
-───────────                          ────────────────                     ────────────────────
-                                     1. Korisnik klikne "Generiši"
-                                            │
-                                     2. getProcessedTranscript(tabId, videoId)
-                                            │
-                                     ┌──────┴──────┐
-                                     │  pipeline   │
-scripting.executeScript ◄──────── Inject fetchTranscriptInPageContext()
-  (world: "MAIN")                    │             │
-       │                             │  SponsorBlock API (paralelno)
-  Strategija 1/2/3 ────────► segments[]            │
-                                     │  Filtriranje + formatiranje
-                                     └──────┬──────┘
-                                            │
-                                     3. llmSummarize() → sažetak
-                                            │
-                                     4. Čuva u storage → otvara result.html
-                                                                    │
-                                                              5. Prikazuje sažetak
-                                                              6. Entity extraction (pozadina)
-                                                              7. Chat / Quiz / Regeneracija
-```
+Ceo titl se uklanja ako se najmanje polovina njegovog trajanja preklapa sa unijom SponsorBlock raspona. Kratak presek na granici tako više ne briše celu korisnu rečenicu. Za titlove bez trajanja ono se izvodi iz narednog titla kada je moguće; preostali segment bez trajanja proverava se po početnoj tački.
 
----
+`savedSeconds` je trajanje unije uklonjenih titlova, bez duplog brojanja preklopa. `categoryStats` predstavlja uniju prijavljenih SponsorBlock raspona za svaku kategoriju. To su različite mere: zbir kategorija može da se razlikuje od uklonjenog vremena i kategorije mogu međusobno da se preklapaju. Filtriranje nije precizno sečenje po rečima.
 
-## Moduli
+Session keš čuva poslednji obrađeni video do šest sati. Nevalidan, budući ili istekao timestamp i prazan tekst ne koriste se; kvar keša ne obara analizu.
 
-### transcript-fetcher.js (MAIN world)
+## AI zahtevi
 
-Funkcija `fetchTranscriptInPageContext(videoId)` se izvršava **u YouTube page kontekstu** — ima pristup cookie-jima, `ytInitialPlayerResponse`, `ytInitialData`, i `ytcfg`.
+Provajderi su fiksni:
 
-Vraća: `{status, segments: [{text, startSec, durSec}], debugLines}`
+- Gemini: `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`, header `x-goog-api-key`, modeli `gemini-3.7-flash` i `gemini-3.5-flash-lite`.
+- OpenRouter: `https://openrouter.ai/api/v1/chat/completions`, header `Authorization: Bearer`, slobodan model slug i podrazumevani `openrouter/auto`.
 
-Interni seam-ovi (fallback lanac):
+Transport odbija druge provajdere i proizvoljne URL-ove. Migracija starih podešavanja čuva kompatibilan ključ za dozvoljenog provajdera, a briše ključ uklonjenog provajdera. Konfiguracija normalizuje pozitivan kontekst i opsege temperature/topP; nula je validna vrednost za sampling.
 
-| Strategija | Opis |
-|---|---|
-| `tryBaseUrl()` | Čita `captionTracks[].baseUrl`, fetch XML, parsira u MAIN world-u |
-| `tryInnerTube()` | POST `/youtubei/v1/get_transcript`, parsira `transcriptSegmentRenderer` |
-| `tryDomScraping()` | A: opis dugme, B: tri-tačke meni, C: engagement panel |
+Rok pojedinačnog AI zahteva je 180 s. HTTP 502/503/504 imaju do dva ponavljanja sa eksponencijalnim odlaganjem; ostale greške i timeout prikazuju se pozivaocu. Parsiranje spaja tekstualne delove Gemini odgovora i razlikuje odgovor bez teksta/safety block od sintaksne greške. JSON tekst se čisti od spoljnog code fence-a, a entiteti i kviz dodatno proveravaju očekivanu strukturu.
 
-### transcript-pipeline.js
+Dugi transkript se deli približno po rečenicama/rečima i sažima redom. Ako zbir delimičnih sažetaka ne staje u kontekst, grupno se dodatno sažima do četiri prolaza. Ako se tekst ne smanjuje ili i dalje ne staje, prikazuje se greška umesto tihog odbacivanja poslednjih delova videa. Broj karaktera je približna procena tokena, a ne tokenizacija provajdera; veoma velika istorija chata i instrukcije i dalje mogu prekoračiti limit.
 
-Konsolidovani duboki modul koji orkestrira celokupan pipeline:
+## Skladište i odvojeni rezultati
 
-```
-getProcessedTranscript(tabId, videoId)
-  → {text, savedSeconds, categoryStats, debugLines, segmentCount, sponsorCount}
-```
+| Oblast | Ključ | Sadržaj |
+| --- | --- | --- |
+| `local` | `llm_config` | Ključ, provajder, model, jezici i sampling podešavanja. |
+| `local` | `custom_templates` | Korisnički šabloni persona. |
+| `local` | `total_usage` | Ukupni tokeni i zbir procenjenog troška. |
+| `local` | `yt_summary_result` | Poslednji sažetak kao kompatibilni prikaz; bez API ključa i transkripta. |
+| `local` | `yt_debug_logs` | Debug log poslednjeg procesa. |
+| `session` | `yt_result_<UUID>` | `{result, transcript}` za `result.html?id=<UUID>`. |
+| `session` | `yt_batch_<UUID>` | Privremena konfiguracija i ID-jevi posla za `playlist.html?id=<UUID>`; briše se po završetku. |
+| `session` | `yt_transcript_cache` | Jedan obrađeni video, rezultat i vreme keširanja. |
 
-Apsorbuje logiku bivših `transcript-parser.js` i `sponsor-filter.js`. XML round-trip je eliminisan — fetcher vraća segments[] direktno.
+Stranica rezultata ne dobija API ključ u sačuvanom rezultatu; za novi zahtev učitava lokalnu konfiguraciju. Novi rezultat čuva UUID analize, izabrani model, personu, detaljnost i izlazni jezik. Lokalni poslednji sažetak ažurira se samo kada se poklapa UUID analize, uključujući dve analize istog videa. Stara stranica bez ID-ja može prikazati poslednji sažetak, ali ne povezuje nasumični stari transkript sa njim. Session snapshotovi rezultata nestaju pri završetku browser sesije; ne postoji trajna istorija svih transkripata niti automatski cleanup pri zatvaranju pojedinačnog taba.
 
-### prompts.js
+Upis potrošnje serijalizovan je unutar jedne stranice i kvar skladišta ne odbacuje već dobijen AI odgovor. Ne postoji globalna transakcija između više otvorenih stranica: istovremeni read/modify/write zahtevi u različitim tabovima mogu izgubiti deo zbirne statistike. Prikazana potrošnja pojedinačnog odgovora ostaje dostupna.
 
-Pure functions za konstrukciju prompta. Bez I/O zavisnosti.
+## Cena i izvori
 
-| Funkcija | Opis |
-|---|---|
-| `buildSystemInstruction(transcript, taskSpec)` | Gradi system prompt sa transkriptom, poglavljima, instrukcijom, personom i jezikom |
-| `resolvePersona(personaValue, customPrompts)` | Razrešava persona vrednost: standardne ključeve prosleđuje dalje, `custom_N` konvertuje u tekst šablona |
+Na datum provere 29.09.2026. plaćeni standardni Gemini tarif je, po milion tokena:
 
-Konstante: `DETAIL_PROMPTS`, `PERSONA_PROMPTS`.
+| Model | Ulaz | Izlaz, uključujući thinking tokene |
+| --- | --- | --- |
+| Gemini 3.7 Flash, do 31.12.2026. | $0.75 | $3.75 |
+| Gemini 3.7 Flash, od 01.01.2027. | $1.50 | $7.50 |
+| Gemini 3.5 Flash-Lite | $0.30 | $2.50 |
 
-### gemini.js
+Kod uključuje prelaz cene 3.7 Flash od 2027. i thinking tokene u izlaznu potrošnju. OpenRouter koristi prijavljeni trošak kada ga odgovor sadrži; ako izostane, prikazana vrednost nije pouzdan račun. Besplatni nivo, caching, popusti i buduće promene tarife nisu obračun provajdera.
 
-LLM transport modul sa internim provider seam-ovima:
+Izvori: [zvanični Gemini modeli](https://ai.google.dev/gemini-api/docs/models) i [Gemini cenovnik](https://ai.google.dev/gemini-api/docs/pricing), provereni 29.09.2026.
 
-| Funkcija | Opis |
-|---|---|
-| `llmTask(config, transcript, taskSpec)` | Centralni task handler: trimming, request, usage tracking, JSON cleanup |
-| `llmSummarize(config, transcript, level, persona)` | Sumarizacija transkripta |
-| `llmSummarizeLong(config, transcript, ...)` | Map-reduce sumarizacija za duge transkripte |
-| `llmExtractEntities(config, transcript)` | Ekstrakcija entiteta (JSON) |
-| `llmQuiz(config, transcript)` | Generisanje kviza (JSON) |
-| `llmChat(config, transcript, history, msg)` | Chat sa kontekstom transkripta |
+## Testovi i pakovanje
 
-Interni provider seam-ovi: `buildGeminiRequest`, `buildOpenAIRequest`, `parseGeminiResponse`, `parseOpenAIResponse`.
+`npm ci` obnavlja razvojne zavisnosti iz lock fajla. `npm test -- --runInBand` prvo proverava ESLint za aplikaciju i testove, zatim pokreće Jest. `npm run lint` pokreće web-ext proveru runtime ekstenzije.
 
-### summary-renderer.js
+Testovi koriste stvarne module, mockovane browser/API granice, DOM i fake timere. Browser-page smoke test učitava stvarne script reference iz tri HTML stranice u njihovom redosledu, bez CommonJS globalnih izvoza. To proverava browser vezivanje modula u JSDOM-u; ne zamenjuje instalaciju u Firefoxu i live YouTube proveru.
 
-Reusable modul za renderovanje summary kartica. Koristi se u `result.js` i `playlist.js`.
+`package.ps1` koristi eksplicitnu listu runtime resursa, putanje iz `PSScriptRoot` i privremeni ZIP koji preimenuje u XPI. Prethodni paket se zamenjuje tek posle uspešnog arhiviranja. Integration test proverava stvarnu arhivu, reference resursa, verziju i očuvanje prethodnog paketa pri grešci.
 
-| Funkcija | Opis |
-|---|---|
-| `renderSummaryCard(container, result, config)` | Renderuje kompletnu summary karticu: TL;DR, summary body, entiteti, SponsorBlock, usage |
-| `formatDuration(seconds)` | Formatira sekunde u `Xm Ys` format |
-
-Konstante: `CATEGORY_LABELS`.
-
-### markdown-renderer.js
-
-Pure functions bez zavisnosti:
-
-| Funkcija | Opis |
-|---|---|
-| `markdownToHtml(md)` | Custom markdown parser: headings, bold/italic, code, lists, timestamps |
-| `setSafeHTML(element, html)` | Bezbedan DOM injection putem DOMParser |
-
-### chat.js
-
-`initChat(config, transcript, messagesEl, inputEl, sendBtnEl)` — Chat modul koji interno drži `chatHistory`. Ne leakuje stanje kao global.
-
-### quiz.js
-
-`handleGenerateQuiz(config, transcript, messagesEl, buttonEl)` — Generisanje kviza, DOM renderovanje, provera odgovora. Potpuno self-contained.
-
-### result.js
-
-Thin orchestrator za stranicu rezultata:
-- `updateSummaryUI(result)` — renderuje sažetak, entitete, SponsorBlock info, usage
-- `regenerateSummary(level)` — ponovna sumarizacija sa drugačijim nivoom detaljnosti
-- `handleDownloadTranscript()` — preuzimanje transkripta kao .txt fajl
-- Entity extraction — pokreće se pri init-u ako entiteti nisu prisutni
-
-### popup.js
-
-Thin orchestrator za popup:
-- Konfiguracija LLM provajdera
-- `startAnalysis()` — poziva `getProcessedTranscript()` i `llmSummarize()`
-- Nadzorna tabla (potrošnja tokena)
-
----
-
-## API Referenca
-
-### YouTube Transcript (MAIN world)
-
-Transcript se preuzima isključivo iz MAIN world-a jer:
-- Content script `fetch()` šalje `Origin: moz-extension://` header — YouTube odbija
-- MAIN world ima prave YouTube cookie-je i `Origin: https://www.youtube.com`
-
-### SponsorBlock API
-
-```
-GET https://sponsor.ajay.app/api/skipSegments
-  ?videoID={id}
-  &categories=["sponsor","selfpromo","interaction","intro","outro"]
-```
-
-### LLM API
-
-Podržani provajderi:
-- **Gemini** — Google AI Studio format (`x-goog-api-key` header)
-- **DeepSeek / Ollama / Custom** — OpenAI-compatible format (`Authorization: Bearer` header)
-
----
-
-## Manifest Permisije
-
-```json
-{
-  "permissions": ["activeTab", "storage", "scripting"],
-  "host_permissions": [
-    "https://*.youtube.com/*",
-    "https://generativelanguage.googleapis.com/*",
-    "https://sponsor.ajay.app/*"
-  ]
-}
-```
-
-| Permisija | Razlog |
-|---|---|
-| `activeTab` | Pristup URL-u i tab ID-u aktivnog taba |
-| `storage` | Čuvanje konfiguracije i rezultata |
-| `scripting` | `executeScript(world: "MAIN")` na YouTube stranici |
-
----
-
-## Debugging
-
-- Debug log je dostupan u popup-u (dugme "Prikaži Debug")
-- Loguje: verziju plugina, browser, URL, video ID, HTTP statuse, dužine odgovora
-- Page-level debug linije (iz MAIN world-a) se prikazuju sa prefiksom `[PAGE]`
-- Extension se reload-uje u `about:debugging#/runtime/this-firefox`
+Dokumentacija, HTML izveštaj, testovi, development konfiguracija i `node_modules` ne ulaze u XPI. [HTML izveštaj pregleda](audit-report.html) sadrži završne rezultate provera i preostala ograničenja.

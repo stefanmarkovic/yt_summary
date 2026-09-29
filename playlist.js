@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', async () => {
+async function initializePlaylist() {
   if (typeof localizePage === 'function') {
     const data = await browser.storage.local.get('llm_config');
     localizePage(data.llm_config?.uiLanguage || 'en');
@@ -24,47 +24,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log(`[PLAYLIST] ${msg}`);
   }
 
-  async function getSponsorSegments(videoId) {
-    try {
-      const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), 1500);
-      const resp = await fetch(`https://sponsor.ajay.app/api/skipSegments?videoID=${videoId}&categories=["sponsor","selfpromo","interaction","intro","outro"]`, {
-        signal: controller.signal
-      });
-      clearTimeout(id);
-      return resp.ok ? await resp.json() : [];
-    } catch { return []; }
-  }
-
   async function getTranscriptDirectly(videoId) {
     await logToDebug(`[DIRECT] Pokrećem getTranscriptDirectly za video ${videoId}...`);
     const url = `https://www.youtube.com/watch?v=${videoId}`;
-    const resp = await fetch(url, { credentials: 'include' });
-    if (!resp.ok) {
-      await logToDebug(`[DIRECT] GREŠKA: Učitavanje watch stranice nije uspelo, HTTP ${resp.status}`);
-      throw new Error(`Watch page load failed with HTTP ${resp.status}`);
-    }
-    const html = await resp.text();
+    const html = await fetchPlaylistResponse(url, { credentials: 'include' }, 'text');
     await logToDebug(`[DIRECT] Watch stranica preuzeta. Dužina HTML-a: ${html.length} karaktera.`);
 
     // 1. Izdvajanje API ključa
-    let apiKey = '';
     const keyMatch = html.match(/"INNERTUBE_API_KEY"\s*:\s*"([^"]+)"/) 
       || html.match(/"innertubeApiKey"\s*:\s*"([^"]+)"/);
-    if (keyMatch) {
-      apiKey = keyMatch[1];
-    } else {
-      apiKey = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
-    }
-    await logToDebug(`[DIRECT] API Key: ${apiKey.substring(0, 10)}...`);
+    if (!keyMatch) throw new Error('YouTube API key not found; using page fallback.');
+    const apiKey = keyMatch[1];
 
     // 2. Izdvajanje clientVersion
-    let clientVersion = '2.20260518.01.00';
     const versionMatch = html.match(/"clientVersion"\s*:\s*"([^"]+)"/) 
       || html.match(/"INNERTUBE_CLIENT_VERSION"\s*:\s*"([^"]+)"/);
-    if (versionMatch) {
-      clientVersion = versionMatch[1];
-    }
+    if (!versionMatch) throw new Error('YouTube client version not found; using page fallback.');
+    const clientVersion = versionMatch[1];
     await logToDebug(`[DIRECT] Client Version: ${clientVersion}`);
 
     // 3. Izdvajanje ytInitialData
@@ -75,16 +51,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       throw new Error("ytInitialData not found in HTML");
     }
     
-    const startIndex = dataMatch.index + dataMatch[0].length;
-    let dataStr = html.substring(startIndex);
-    const endMatch = dataStr.match(/};/) || dataStr.match(/}<\/script>/);
-    if (endMatch) {
-      dataStr = dataStr.substring(0, endMatch.index + 1);
-    }
-    
     let ytData;
     try {
-      ytData = JSON.parse(dataStr);
+      ytData = parsePlaylistInitialData(html, dataMatch.index + dataMatch[0].length);
     } catch (e) {
       await logToDebug(`[DIRECT] GREŠKA: Neuspešno parsiranje ytInitialData JSON-a.`);
       throw new Error("Failed to parse ytInitialData");
@@ -123,23 +92,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     };
 
-    const postResp = await fetch(postUrl, {
+    const data = await fetchPlaylistResponse(postUrl, {
       method: 'POST',
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ context, params: transcriptParams })
-    });
-
-    await logToDebug(`[DIRECT] InnerTube HTTP status: ${postResp.status}`);
-    if (!postResp.ok) {
-      const errTxt = await postResp.text();
-      await logToDebug(`[DIRECT] GREŠKA: InnerTube poziv nije uspeo: ${errTxt.substring(0, 150)}`);
-      throw new Error(`InnerTube API failed with HTTP ${postResp.status}`);
-    }
-
-    const data = await postResp.json();
+    }, 'json');
     const segments = [];
     for (const action of (data.actions || [])) {
       const panel = action.updateEngagementPanelAction?.content?.transcriptRenderer
@@ -171,20 +131,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     const titleMatch = html.match(/<meta\s+name="title"\s+content="([^"]+)"/)
       || html.match(/<title>([^<]+)<\/title>/);
     if (titleMatch) {
-      title = titleMatch[1].replace(" - YouTube", "");
+      const titleElement = new DOMParser().parseFromString(`<textarea>${titleMatch[1]}</textarea>`, 'text/html');
+      title = titleElement.querySelector('textarea').textContent.replace(/ - YouTube$/, '');
     }
 
     return { segments, trackInfo: { languageCode: 'en', kind: 'innertube' }, title };
   }
 
-  const storage = await browser.storage.local.get('batch_job');
-  if (!storage.batch_job) {
-    document.getElementById('progress-text').textContent = 'No batch job found.';
+  const jobId = new URLSearchParams(window.location.search).get('id');
+  const jobKey = jobId ? `yt_batch_${jobId}` : null;
+  const storage = jobKey ? await browser.storage.session.get(jobKey) : {};
+  const batch_job = jobKey ? storage[jobKey] : null;
+  if (!batch_job || !Array.isArray(batch_job.videoIds) || !batch_job.llmConfig?.apiKey) {
+    document.getElementById('progress-text').textContent = getLocalizedString('batch_missing', document.documentElement.lang);
     await logToDebug("Nije pronađen batch posao u skladištu.");
     return;
   }
 
-  const { batch_job } = storage;
+  localizePage(batch_job.llmConfig.uiLanguage || 'en');
+  const localize = key => getLocalizedString(key, batch_job.llmConfig.uiLanguage || 'en');
   const total = batch_job.videoIds.length;
   const progressText = document.getElementById('progress-text');
   const progressBar = document.getElementById('batch-progress');
@@ -194,12 +159,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   for (let i = 0; i < total; i++) {
     const videoId = batch_job.videoIds[i];
-    const statusMsg = `Processing video ${i+1} of ${total}... (ID: ${videoId})`;
+    const statusMsg = localize('batch_processing').replace('{current}', i + 1).replace('{total}', total);
     progressText.textContent = statusMsg;
     progressBar.value = (i / total) * 100;
     await logToDebug(statusMsg);
 
-    let tab;
     let transcriptText = "";
     let savedSeconds = 0;
     let categoryStats = {};
@@ -262,7 +226,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             await logToDebug(`  [PAGE] ${line}`);
           }
         } finally {
-          if (win && win.id) {
+          if (win?.id !== undefined) {
             try {
               await browser.windows.remove(win.id);
               await logToDebug(`Zatvoren pozadinski prozor (ID: ${win.id}).`);
@@ -273,31 +237,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }
 
-      // Ako je direktan fetch uspeo, moramo sami da filtriramo SponsorBlock segmente
       if (segments) {
-
-        for (const seg of sponsorSegments) {
-          const cat = seg.category || 'unknown';
-          const duration = (seg.segment?.[1] || 0) - (seg.segment?.[0] || 0);
-          categoryStats[cat] = (categoryStats[cat] || 0) + duration;
-        }
-        
-        const skipRanges = sponsorSegments.map(s => s.segment);
-        const filtered = segments.filter(seg => {
-          const segEnd = seg.startSec + seg.durSec;
-          const isSkipped = skipRanges.some(([s, e]) => seg.startSec < e && segEnd > s);
-          if (isSkipped) { savedSeconds += seg.durSec; return false; }
-          return true;
-        });
-
-        transcriptText = filtered.map(s => {
-          const min = Math.floor(s.startSec / 60);
-          const sec = Math.floor(s.startSec % 60).toString().padStart(2, '0');
-          return `[${min}:${sec}] ${s.text}`;
-        }).join(' ');
+        const processed = processTranscriptSegments(segments, sponsorSegments);
+        transcriptText = processed.text;
+        savedSeconds = processed.savedSeconds;
+        categoryStats = processed.categoryStats;
       }
-      
-      const sumMsg = `Summarizing video ${i+1}...`;
+      if (!transcriptText) throw new Error('No usable transcript content.');
+
+      const sumMsg = localize('batch_summarizing').replace('{current}', i + 1);
       progressText.textContent = sumMsg;
       await logToDebug(sumMsg);
       
@@ -358,24 +306,56 @@ document.addEventListener('DOMContentLoaded', async () => {
       div.style.marginBottom = '20px';
       const errH3 = document.createElement('h3');
       errH3.style.color = '#ef4444';
-      errH3.textContent = `Video ${i+1} Error`;
+      errH3.textContent = `${localize('status_error')}Video ${i + 1}`;
       const errP = document.createElement('p');
       errP.textContent = err.message;
       div.appendChild(errH3);
       div.appendChild(errP);
       resultsContainer.appendChild(div);
       console.error(`Batch video ${videoId} error:`, err);
-    } finally {
-      if (tab) {
-        await logToDebug(`Zatvaram pozadinski tab za ${videoId}.`);
-        await browser.tabs.remove(tab.id);
-      }
     }
   }
 
   progressBar.value = 100;
-  const finishMsg = `Finished processing ${total} videos.`;
+  const finishMsg = localize('batch_finished').replace('{total}', total);
   progressText.textContent = finishMsg;
   await logToDebug(finishMsg);
-  await browser.storage.local.remove('batch_job');
-});
+  await browser.storage.session.remove(jobKey);
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { initializePlaylist, parsePlaylistInitialData, fetchPlaylistResponse };
+} else {
+  document.addEventListener('DOMContentLoaded', initializePlaylist);
+}
+
+// Scan a balanced JSON object rather than splitting at a delimiter inside a title.
+function parsePlaylistInitialData(html, startIndex) {
+  const start = html.indexOf('{', startIndex);
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  for (let index = start; index < html.length && start !== -1; index++) {
+    const char = html[index];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') quoted = false;
+    } else if (char === '"') quoted = true;
+    else if (char === '{') depth++;
+    else if (char === '}' && --depth === 0) return JSON.parse(html.slice(start, index + 1));
+  }
+  throw new Error('Incomplete ytInitialData JSON');
+}
+
+async function fetchPlaylistResponse(url, options, format, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    if (!response.ok) throw new Error(`YouTube request failed with HTTP ${response.status}`);
+    return await response[format]();
+  } finally {
+    clearTimeout(timer);
+  }
+}

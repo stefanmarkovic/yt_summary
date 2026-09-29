@@ -1,2 +1,9 @@
-﻿*.b64
+*.b64
 *.xpi
+*.zip
+node_modules/
+coverage/
+web-ext-artifacts/
+.npm-cache/
+*.log
+tmp/

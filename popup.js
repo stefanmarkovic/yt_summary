@@ -1,28 +1,11 @@
 // YT Summary AI - popup.js
-window.onerror = function(message, source, lineno, colno, _error) {
-  const errDiv = document.createElement('div');
-  errDiv.style.cssText = 'color:red;font-size:10px;background:#fee;padding:5px;margin:5px;border:1px solid red;';
-  errDiv.textContent = `ERROR: ${message} at ${lineno}:${colno}`;
-  document.body.appendChild(errDiv);
-};
-window.onunhandledrejection = function(event) {
-  const errDiv = document.createElement('div');
-  errDiv.style.cssText = 'color:red;font-size:10px;background:#fee;padding:5px;margin:5px;border:1px solid red;';
-  errDiv.textContent = `PROMISE REJECTION: ${event.reason}`;
-  document.body.appendChild(errDiv);
-};
-
 const PLUGIN_VERSION = (typeof browser !== 'undefined' && browser.runtime?.getManifest)
   ? browser.runtime.getManifest().version
   : "4.4";
 
-const PRESETS = {
-  gemini: { url: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent", model: "gemini-3-flash-preview" },
-  deepseek: { url: "https://api.deepseek.com/chat/completions", model: "deepseek-chat" },
-  ollama: { url: "http://localhost:11434/v1/chat/completions", model: "qwen2.5:7b" }
-};
+const PRESETS = LLM_PROVIDERS;
 
-document.addEventListener('DOMContentLoaded', async () => {
+async function initializePopup() {
   const setupView = document.getElementById('setup-view');
   const mainView = document.getElementById('main-view');
 
@@ -67,8 +50,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function updateDashboard() {
     const data = await browser.storage.local.get('total_usage');
     const u = data.total_usage || { tokens: 0, cost: 0 };
-    dashTokens.textContent = u.tokens.toLocaleString();
-    dashCost.textContent = '$' + parseFloat(u.cost).toFixed(6);
+    dashTokens.textContent = (Number(u.tokens) || 0).toLocaleString();
+    dashCost.textContent = '$' + (Number(u.cost) || 0).toFixed(6);
   }
   updateDashboard();
 
@@ -82,9 +65,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (providerSelect.value === 'gemini') {
       geminiModelWrapper.classList.remove('hidden');
       advancedSettingsWrapper.classList.add('hidden');
+      apiModelInput.readOnly = true;
     } else {
       geminiModelWrapper.classList.add('hidden');
       advancedSettingsWrapper.classList.remove('hidden');
+      apiModelInput.readOnly = false;
     }
   }
 
@@ -96,19 +81,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (p === 'gemini') {
         apiModelInput.value = geminiModelSelect.value;
       } else {
-        apiModelInput.value = PRESETS[p].model;
+        apiModelInput.value = PRESETS[p].defaultModel;
       }
-    }
-    
-    // Default values for advanced settings based on provider
-    if (p === 'ollama') {
-      contextWindowInput.value = 32768;
-      temperatureInput.value = 0.7;
-      topPInput.value = 1.0;
-    } else if (p === 'deepseek') {
-      contextWindowInput.value = 65536;
-      temperatureInput.value = 0.7;
-      topPInput.value = 1.0;
     }
 
     updateVisibility();
@@ -129,20 +103,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     log("Error loading config: " + e.message);
   }
 
-  // Migration for old config
-  if (config && config.provider === 'gemini-lite') {
-    config.provider = 'gemini';
-    config.model = 'gemini-3.1-flash-lite';
+  // Migrate legacy Gemini Lite and replace removed providers with safe defaults.
+  const normalizedConfig = normalizeLlmConfig(config);
+  if (JSON.stringify(normalizedConfig) !== JSON.stringify(config)) {
+    config = normalizedConfig;
     await browser.storage.local.set({ llm_config: config });
   }
 
   // Initialize UI with config
   providerSelect.value = config.provider || 'gemini';
-  apiUrlInput.value = config.url || PRESETS[providerSelect.value]?.url || PRESETS.gemini.url;
+  apiUrlInput.value = PRESETS[providerSelect.value].url;
   apiKeyInput.value = config.apiKey || '';
   contextWindowInput.value = config.contextWindow || 32768;
-  temperatureInput.value = config.temperature || 0.7;
-  topPInput.value = config.topP || 1.0;
+  temperatureInput.value = config.temperature ?? 0.7;
+  topPInput.value = config.topP ?? 1.0;
 
   uiLanguageSelect.value = config.uiLanguage || 'en';
   outputLanguageSelect.value = config.outputLanguage || 'English';
@@ -184,7 +158,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const opt = document.createElement('option');
       opt.value = 'custom_' + idx;
-      opt.textContent = `Custom: ${p.name}`;
+      opt.textContent = `${getLocalizedString('custom_prefix', config.uiLanguage || 'en')}: ${p.name}`;
       personaSelect.appendChild(opt);
     });
   }
@@ -212,6 +186,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof localizePage === 'function') {
       localizePage(config.uiLanguage);
     }
+    renderCustomPrompts();
   });
 
   outputLanguageSelect.addEventListener('change', async () => {
@@ -227,37 +202,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     apiModelInput.value = geminiModelSelect.value;
   } else {
-    apiModelInput.value = config.model || PRESETS[providerSelect.value]?.model || '';
+    apiModelInput.value = config.model || PRESETS[providerSelect.value].defaultModel;
   }
 
-  if (!config || (!config.apiKey && config.provider !== 'ollama')) {
+  if (!config.apiKey) {
     showView('setup');
   }
   updateVisibility();
 
   saveKeyBtn.addEventListener('click', async () => {
-    const newConfig = {
+    const newConfig = normalizeLlmConfig({
       provider: providerSelect.value,
-      url: apiUrlInput.value.trim(),
+      url: PRESETS[providerSelect.value].url,
       model: apiModelInput.value.trim(),
       apiKey: apiKeyInput.value.trim(),
       contextWindow: parseInt(contextWindowInput.value) || 32768,
-      temperature: parseFloat(temperatureInput.value) || 0.7,
-      topP: parseFloat(topPInput.value) || 1.0,
+      temperature: Number.isFinite(parseFloat(temperatureInput.value)) ? parseFloat(temperatureInput.value) : 0.7,
+      topP: Number.isFinite(parseFloat(topPInput.value)) ? parseFloat(topPInput.value) : 1.0,
       uiLanguage: uiLanguageSelect.value,
       outputLanguage: outputLanguageSelect.value
-    };
-    if (newConfig.url && newConfig.model) {
+    });
+    if (newConfig.apiKey && newConfig.model) {
       await browser.storage.local.set({ llm_config: newConfig });
       config = newConfig; // update local ref
       log("Podešavanja sačuvana.");
       showView('main');
     } else {
-      alert("URL i Model su obavezni.");
+      alert(getLocalizedString('settings_required', config.uiLanguage || 'en'));
     }
   });
 
   cancelBtn.addEventListener('click', () => {
+    if (!config.apiKey) return;
     showView('main');
   });
 
@@ -290,15 +266,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       } catch(e) { console.warn("Playlist URL parse error:", e.message); }
     }
-  });
+  }).catch(error => log(`Playlist detection failed: ${error.message}`));
 
   const playlistSummarizeBtn = document.getElementById('playlist-summarize-btn');
   if (playlistSummarizeBtn) {
     playlistSummarizeBtn.addEventListener('click', async () => {
+      if (playlistSummarizeBtn.disabled) return;
       log("Inicijalizacija batch procesiranja...");
       playlistSummarizeBtn.disabled = true;
+      try {
       const tabs = await browser.tabs.query({ active: true, currentWindow: true });
       const tab = tabs[0];
+      if (!tab || !config.apiKey) throw new Error(getLocalizedString('settings_required', config.uiLanguage || 'en'));
       
       const [{ result: videoIds }] = await browser.scripting.executeScript({
         target: { tabId: tab.id },
@@ -339,7 +318,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
 
       if (!videoIds || videoIds.length === 0) {
-        alert("No videos found in playlist.");
+        alert(getLocalizedString('playlist_empty', config.uiLanguage || 'en'));
         playlistSummarizeBtn.disabled = false;
         return;
       }
@@ -353,8 +332,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Sačuvaj trenutne logove pre otvaranja playlist.html
       await browser.storage.local.set({ yt_debug_logs: debugLog.value });
 
-      await browser.storage.local.set({
-        batch_job: {
+      const jobId = crypto.randomUUID();
+      await browser.storage.session.set({
+        [`yt_batch_${jobId}`]: {
           videoIds,
           llmConfig: config,
           detail,
@@ -364,28 +344,34 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       });
 
-      await browser.tabs.create({ url: browser.runtime.getURL('playlist.html') });
+      await browser.tabs.create({ url: browser.runtime.getURL(`playlist.html?id=${jobId}`) });
       window.close();
+      } catch (error) {
+        log(`Playlist error: ${error.message}`);
+        statusDiv.textContent = getLocalizedString('status_error', config.uiLanguage || 'en') + error.message;
+      } finally {
+        playlistSummarizeBtn.disabled = false;
+      }
     });
   }
 
   async function startAnalysis() {
+    if (summarizeBtn.disabled) return;
     log(`=== New Analysis | v${PLUGIN_VERSION} | ${navigator.userAgent.match(/Firefox\/[\d.]+/)?.[0] || '?'} ===`);
-    statusDiv.innerText = typeof getLocalizedString === 'function' ? getLocalizedString('status_init', config.uiLanguage || 'en') : "Initializing...";
+    statusDiv.textContent = typeof getLocalizedString === 'function' ? getLocalizedString('status_init', config.uiLanguage || 'en') : "Initializing...";
     summarizeBtn.disabled = true;
 
 
     try {
       const tabs = await browser.tabs.query({ active: true, currentWindow: true });
       const tab = tabs[0];
+      const videoId = getYoutubeVideoId(tab?.url);
+      if (!videoId) throw new Error(getLocalizedString('not_youtube', config.uiLanguage || 'en'));
       log(`Tab: ${tab.url}`);
-
-      const videoId = tab.url.match(/(?:v=|\/)([0-9A-Za-z_-]{11})/)?.[1];
-      if (!videoId) throw new Error("Niste na YouTube videu.");
       log(`Video ID: ${videoId}`);
 
       // Transcript pipeline: dohvatanje, parsiranje, SponsorBlock filtriranje
-      statusDiv.innerText = typeof getLocalizedString === 'function' ? getLocalizedString('status_fetching', config.uiLanguage || 'en') : "Fetching transcript...";
+      statusDiv.textContent = typeof getLocalizedString === 'function' ? getLocalizedString('status_fetching', config.uiLanguage || 'en') : "Fetching transcript...";
       const transcript = await getProcessedTranscript(tab.id, videoId);
 
       for (const line of transcript.debugLines) {
@@ -398,7 +384,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       log(`Text: ${transcript.text.length} chars (~${Math.round(transcript.text.length / 4)} tokens).`);
 
       // LLM sumarizacija
-      statusDiv.innerText = typeof getLocalizedString === 'function' ? getLocalizedString('status_thinking', config.uiLanguage || 'en') : "AI is thinking...";
+      statusDiv.textContent = typeof getLocalizedString === 'function' ? getLocalizedString('status_thinking', config.uiLanguage || 'en') : "AI is thinking...";
       const { llm_config } = await browser.storage.local.get('llm_config');
       if (!llm_config) throw new Error("LLM nije konfigurisan.");
 
@@ -412,7 +398,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       const onProgress = (msg) => {
-        statusDiv.innerText = msg;
+        statusDiv.textContent = msg;
         log(`[PROGRES] ${msg}`);
       };
 
@@ -422,9 +408,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const videoTitle = tab.title?.replace(' - YouTube', '') || 'Video sažetak';
 
-      await browser.storage.session.set({ yt_transcript: transcript.text });
-
+      const resultId = crypto.randomUUID();
       const finalResult = {
+        id: resultId,
         summary: result.text,
         title: videoTitle,
         videoId,
@@ -433,14 +419,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         categoryStats: transcript.categoryStats,
         chapters: transcript.chapters,
         usage: result.usage,
+        model: llm_config.model,
+        detail,
+        persona,
+        outputLang,
         timestamp: Date.now()
       };
 
+      await browser.storage.session.set({
+        [`yt_result_${resultId}`]: { result: finalResult, transcript: transcript.text }
+      });
       await browser.storage.local.set({ yt_summary_result: finalResult });
       await browser.storage.local.set({ yt_debug_logs: debugLog.value });
-      await browser.tabs.create({ url: browser.runtime.getURL('result.html') });
+      await browser.tabs.create({ url: browser.runtime.getURL(`result.html?id=${resultId}`) });
 
-      statusDiv.innerText = "Gotovo! Sažetak otvoren u novom tabu.";
+      statusDiv.textContent = getLocalizedString('status_done', config.uiLanguage || 'en');
       log("=== Finished — opened new tab ===");
 
     } catch (error) {
@@ -451,10 +444,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }
       log(`Stack: ${error.stack?.substring(0, 300) || 'N/A'}`);
-      statusDiv.innerText = "Greška: " + error.message;
+      statusDiv.textContent = getLocalizedString('status_error', config.uiLanguage || 'en') + error.message;
       await browser.storage.local.set({ yt_debug_logs: debugLog.value });
     } finally {
       summarizeBtn.disabled = false;
     }
   }
-});
+}
+
+function getYoutubeVideoId(urlString) {
+  try {
+    const url = new URL(urlString);
+    if (!['https:', 'http:'].includes(url.protocol)) return null;
+    const host = url.hostname;
+    let videoId;
+    if (host === 'youtu.be') videoId = url.pathname.slice(1).split('/')[0];
+    else if (host === 'youtube.com' || host.endsWith('.youtube.com')) {
+      videoId = url.pathname === '/watch' ? url.searchParams.get('v') : url.pathname.match(/^\/(?:shorts|embed|live)\/([^/]+)/)?.[1];
+    }
+    return /^[0-9A-Za-z_-]{11}$/.test(videoId || '') ? videoId : null;
+  } catch { return null; }
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { initializePopup, getYoutubeVideoId };
+} else {
+  document.addEventListener('DOMContentLoaded', initializePopup);
+}

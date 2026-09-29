@@ -1,70 +1,77 @@
-// Quiz modul — generisanje kviza, renderovanje, provera odgovora
+// Quiz rendering uses DOM text nodes: model output is never inserted as HTML.
 /* exported handleGenerateQuiz */
+let quizSequence = 0;
 
 async function handleGenerateQuiz(config, transcript, messagesEl, buttonEl) {
-  if (!transcript || !config) return;
+  if (!transcript || !config || buttonEl.disabled) return;
+  const localize = key => getLocalizedString(key, config.uiLanguage || 'en');
+  const originalLabel = buttonEl.textContent;
   buttonEl.disabled = true;
-  buttonEl.textContent = "Generisanje...";
-
+  buttonEl.textContent = localize('quiz_generating');
   try {
     const result = await llmQuiz(config, transcript);
     const questions = JSON.parse(result.text);
-
+    if (!Array.isArray(questions) || questions.length === 0 || questions.some(q =>
+      !q || typeof q.question !== 'string' || !Array.isArray(q.options) || q.options.length < 2 ||
+      q.options.some(option => typeof option !== 'string') || !Number.isInteger(q.answerIndex) ||
+      q.answerIndex < 0 || q.answerIndex >= q.options.length)) {
+      throw new Error(localize('quiz_invalid'));
+    }
+    const quizId = ++quizSequence;
     const quizDiv = document.createElement('div');
-    quizDiv.className = `message message-model quiz-container`;
-    quizDiv.style.cssText = "background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);";
-
-    let html = `<h3 style="margin-top:0; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:8px;">Kviz znanja</h3>`;
-
-    questions.forEach((q, qIndex) => {
-      html += `<div class="quiz-question" style="margin-bottom: 15px;">
-        <p style="font-weight: bold; margin-bottom: 8px;">${qIndex + 1}. ${q.question}</p>`;
-      q.options.forEach((opt, oIndex) => {
-        html += `<label style="display:block; margin-bottom: 4px; font-size: 13px; cursor: pointer;">
-          <input type="radio" name="q${qIndex}" value="${oIndex}"> ${opt}
-        </label>`;
+    quizDiv.className = 'message message-model quiz-container';
+    const heading = document.createElement('h3');
+    heading.textContent = localize('quiz_title');
+    quizDiv.appendChild(heading);
+    const questionDivs = questions.map((question, questionIndex) => {
+      const questionDiv = document.createElement('div');
+      questionDiv.className = 'quiz-question';
+      const text = document.createElement('p');
+      text.textContent = `${questionIndex + 1}. ${question.question}`;
+      questionDiv.appendChild(text);
+      question.options.forEach((option, optionIndex) => {
+        const label = document.createElement('label');
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = `quiz-${quizId}-question-${questionIndex}`;
+        input.value = optionIndex;
+        label.append(input, document.createTextNode(' ' + option));
+        questionDiv.appendChild(label);
       });
-      html += `</div>`;
+      quizDiv.appendChild(questionDiv);
+      return questionDiv;
     });
-
-    html += `<button id="submit-quiz-btn" class="secondary" style="margin-top: 10px;">Proveri odgovore</button>`;
-
-    setSafeHTML(quizDiv, html);
+    const submit = document.createElement('button');
+    submit.className = 'secondary quiz-submit';
+    submit.textContent = localize('quiz_check');
+    quizDiv.appendChild(submit);
     messagesEl.appendChild(quizDiv);
     messagesEl.scrollTop = messagesEl.scrollHeight;
-
-    // Check answers listener
-    quizDiv.querySelector('#submit-quiz-btn').addEventListener('click', (e) => {
+    submit.addEventListener('click', () => {
       let score = 0;
-      questions.forEach((q, qIndex) => {
-        const selected = quizDiv.querySelector(`input[name="q${qIndex}"]:checked`);
-        const qDiv = quizDiv.querySelectorAll('.quiz-question')[qIndex];
-
-        if (selected) {
-          const sIndex = parseInt(selected.value);
-          if (sIndex === q.answerIndex) {
-            score++;
-            selected.parentElement.style.color = "#4ade80"; // green
-          } else {
-            selected.parentElement.style.color = "#f87171"; // red
-            // Highlight correct one
-            qDiv.querySelectorAll('label')[q.answerIndex].style.color = "#4ade80";
-          }
-        } else {
-          qDiv.querySelectorAll('label')[q.answerIndex].style.color = "#4ade80";
-        }
+      questions.forEach((question, index) => {
+        const questionDiv = questionDivs[index];
+        const inputs = questionDiv.querySelectorAll('input');
+        const selected = questionDiv.querySelector('input:checked');
+        if (selected && Number(selected.value) === question.answerIndex) score++;
+        if (selected) selected.parentElement.style.color = Number(selected.value) === question.answerIndex ? '#4ade80' : '#f87171';
+        inputs[question.answerIndex].parentElement.style.color = '#4ade80';
+        inputs.forEach(input => { input.disabled = true; });
       });
-      e.target.textContent = `Rezultat: ${score}/${questions.length}`;
-      e.target.disabled = true;
+      submit.textContent = `${localize('quiz_score')}: ${score}/${questions.length}`;
+      submit.disabled = true;
     });
-
-  } catch (e) {
+  } catch (error) {
     const errorDiv = document.createElement('div');
     errorDiv.className = 'message message-model';
-    errorDiv.textContent = "Greška pri generisanju kviza: " + e.message;
+    errorDiv.textContent = localize('quiz_error') + error.message;
     messagesEl.appendChild(errorDiv);
   } finally {
     buttonEl.disabled = false;
-    buttonEl.textContent = "🎲 Generiši kviz";
+    buttonEl.textContent = originalLabel;
   }
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { handleGenerateQuiz };
 }

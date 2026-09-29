@@ -1,57 +1,54 @@
 # YT Summary AI
 
-Firefox (Manifest V3) ekstenzija koja generiše AI sažetke YouTube videa na srpskom jeziku. Preuzima transkript, filtrira sponzorisane segmente (SponsorBlock), i koristi Gemini AI za sumarizaciju.
+Firefox ekstenzija (Manifest V3, verzija 4.4.1) za sažimanje YouTube videa pomoću Google Gemini ili OpenRouter servisa. Jezik interfejsa i jezik AI odgovora biraju se nezavisno.
 
-## Funkcionalnosti
+## Šta podržava
 
-- **AI Sumarizacija:** Koristi Google Gemini API za generisanje kvalitetnih sažetaka transkripata.
-- **SponsorBlock Integracija:** Automatski prepoznaje i uklanja sponzorske poruke, samopromociju, intro/outro i interakcije pre nego što se tekst pošalje AI-u (štedi tokene i poboljšava kvalitet).
-- **Fleksibilan nivo detaljnosti:** Izaberite između kratkog, srednjeg i veoma detaljnog rezimea pre i posle generisanja.
-- **Chat sa AI-jem:** Interfejs koji omogućava korisniku da postavlja pitanja o videu.
-- **Robusno dohvatanje transkripta:** Kompleksan fallback lanac za prevazilaženje restrikcija (koristi direktan YouTube context, InnerTube API, i po potrebi DOM scraping).
-- **Bezbednost:** Ugrađena sanitizacija Markdown renderovanja radi zaštite od XSS-a.
+- Kratak, srednji i detaljan sažetak; standardni stil, ugrađene persone i sopstveni šabloni.
+- Dohvat postojećih YouTube titlova kroz paralelne API pokušaje i DOM rezervni put.
+- SponsorBlock filtriranje, vremenske oznake i procenu izostavljenog vremena.
+- Chat, kviz, izdvajanje entiteta, oblak ključnih reči i ponovno sažimanje.
+- Grupnu obradu videa pronađenih na stranici liste.
+- Kopiranje teksta/Markdowna i izvoz u HTML, Markdown za Notion ili PDF preko dijaloga za štampu.
 
-## Arhitektura
+Ekstenzija ne prepoznaje govor iz zvuka: video mora imati dostupan transkript. Grupna obrada ne učitava automatski celu listu ako YouTube prikazuje samo njen deo.
 
-1. **Transcript:** Kroz `scripting.executeScript(world: "MAIN")` ekstenzija pokreće logiku u izolovanom *page context*-u (glavnom YouTube prozoru) omogućavajući premošćavanje mnogih zaštita.
-2. **Filtriranje:** Korišćenjem javnog SponsorBlock API-ja transkript se reže tačno na mestima gde se pojavljuju definisani nebitni segmenti.
-3. **Generisanje (AI):** Poziva se Google Gemini API (koristi se v1beta endpoint).
-4. **Prikaz rezultata:** Ekstenzija otvara poseban lokalni tab gde prikazuje renderovan (bezbedan) Markdown, chat UI, potrošnju API-ja, i informacije o vremenu sačuvanom pomoću SponsorBlock-a.
+## Instalacija i podešavanje
 
-## Struktura projekta
+1. U Firefoxu otvorite `about:debugging#/runtime/this-firefox`.
+2. Kliknite **Load Temporary Add-on** i izaberite `manifest.json`.
+3. U podešavanjima izaberite provajdera i unesite njegov API ključ.
+4. Za Gemini izaberite `gemini-3.7-flash` ili `gemini-3.5-flash-lite`. Za OpenRouter unesite model slug ili koristite `openrouter/auto`.
+5. Otvorite YouTube video, podesite detaljnost, stil i jezik odgovora, pa pokrenite generisanje.
 
-Evo potpunog pregleda fajlova i njihovih funkcija:
+Ključ i podešavanja ostaju u lokalnom skladištu ekstenzije. Transkript i pitanja šalju se izabranom AI servisu; SponsorBlock dobija ID videa. Prikazana cena je procena, a stvarni račun zavisi od provajdera i uslova naloga.
 
-```text
-yt_summary/
-├── manifest.json            # MV3 konfiguracija ekstenzije i permisije
-├── popup.html               # HTML struktura i UI popup prozora
-├── popup.css                # Stilovi vezani direktno za popup meni
-├── popup.js                 # Osluškivači događaja (DOM) i glavni "orchestrator" aplikacije
-├── gemini.js                # LLM API: llmTask modul, provider seam-ovi
-├── transcript-fetcher.js    # MAIN world: dohvatanje transkripta (3 strategije)
-├── transcript-pipeline.js   # Konsolidovani pipeline: fetch + SponsorBlock + filtriranje
-├── markdown-renderer.js     # Pure function: markdownToHtml + setSafeHTML
-├── chat.js                  # Chat modul
-├── quiz.js                  # Quiz modul
-├── result.html              # Struktura punog novog taba u kojem se prikazuju rezultati
-├── result.css               # UI/UX stilovi za glavni rezultat, tabele i chat
-├── result.js                # Orchestrator rezultata: UI, regeneracija, entity extraction
-├── DOCUMENTATION.md         # Razvojna i detaljna tehnička specifikacija arhitekture projekta
-├── .gitattributes           # Kontrola text LF konfiguracija
-├── .gitignore               # GIT ignore fajl
-└── icons/                   # Direktorijum sa grafičkim ikonicama
+## Razvoj i provera
+
+Potreban je Node.js sa npm-om; za XPI pakovanje potreban je PowerShell (`powershell.exe` na Windowsu, `pwsh` za integration test na drugim sistemima).
+
+```sh
+npm ci
+npm test -- --runInBand
+npm run lint
+npm run package
 ```
 
-## Instalacija
+`npm test` uključuje ESLint za aplikaciju i testove, zatim Jest. Test pakovanja pokreće stvarni PowerShell skript iz drugog direktorijuma i proverava sadržaj nastalog XPI-ja. `npm run package` pravi `yt-summary-firefox.xpi` sa isključivo runtime fajlovima. `npm start` pokreće razvojnu Firefox sesiju preko web-ext-a.
 
-1. Klonirajte repozitorijum.
-2. Otvorite Firefox pregledač i idite na `about:debugging#/runtime/this-firefox`.
-3. Kliknite na **"Load Temporary Add-on"**.
-4. Izaberite `manifest.json` iz direktorijuma projekta.
+`node_modules`, privremeni logovi, coverage i generisani paketi ne pripadaju Git repozitorijumu. Zavisnosti se obnavljaju iz `package-lock.json` komandom `npm ci`.
 
-## Konfiguracija
+## Struktura
 
-Da bi ekstenzija radila, potreban vam je sopstveni API ključ:
-1. Posetite [Google AI Studio](https://aistudio.google.com/app/apikey) i besplatno kreirajte Gemini ključ.
-2. Unesite kreirani ključ u podešavanja ekstenzije u samom popup prozoru (klik na "Podešavanja"). Ključ se čuva isključivo lokalno.
+| Oblast | Fajlovi |
+| --- | --- |
+| Podešavanja i pokretanje | `popup.js`, `popup.html`, `popup.css` |
+| Dohvat i filtriranje | `transcript-fetcher.js`, `transcript-pipeline.js` |
+| AI transport i instrukcije | `gemini.js`, `prompts.js` |
+| Rezultat i lista | `result.js/html/css`, `playlist.js/html` |
+| Bezbedan prikaz | `markdown-renderer.js`, `summary-renderer.js` |
+| Dodatne funkcije | `chat.js`, `quiz.js`, `i18n.js` |
+| Konfiguracija i pakovanje | `manifest.json`, `package.json`, `package.ps1`, `.eslintrc.json` |
+| Provere | `tests/` |
+
+Detalji i ograničenja: [tehnička dokumentacija](DOCUMENTATION.md). Kratko objašnjenje za korisnika: [docs.html](docs.html). Nalazi i urađene izmene: [audit-report.html](audit-report.html).

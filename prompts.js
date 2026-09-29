@@ -14,9 +14,11 @@ const PERSONA_PROMPTS = {
 };
 
 function resolvePersona(personaValue, customPrompts = []) {
-  if (personaValue.startsWith('custom_')) {
-    const idx = parseInt(personaValue.replace('custom_', ''));
-    if (customPrompts[idx]) return customPrompts[idx].text;
+  if (typeof personaValue !== 'string') return 'standard';
+  const match = personaValue.match(/^custom_(\d+)$/);
+  if (match) {
+    const prompt = customPrompts[Number(match[1])];
+    if (typeof prompt?.text === 'string') return prompt.text;
   }
   return personaValue;
 }
@@ -33,12 +35,15 @@ function buildSystemInstruction(transcript, taskSpec) {
       const sec = Math.floor(c.timeSec % 60).toString().padStart(2, '0');
       prompt += `- [${min}:${sec}] ${c.title}\n`;
     });
-    prompt += `\nInstrukcija: Koristi ova poglavlja da strukturiraš sažetak. ${taskSpec.instruction} Na početku uvek stavi jednu rečenicu sa prefiksom 'TL;DR:' koja sažima ceo video. Odgovaraj na ${outputLanguage} jeziku (Respond in ${outputLanguage} language).`;
-  } else {
-    prompt += `Instrukcija: ${taskSpec.instruction} Na početku uvek stavi jednu rečenicu sa prefiksom 'TL;DR:' koja sažima ceo video. Odgovaraj na ${outputLanguage} jeziku (Respond in ${outputLanguage} language).`;
+    if (taskSpec.summary) prompt += `\nKoristi ova poglavlja da strukturiraš sažetak.\n`;
   }
-
-  prompt += ` Obavezno zadrži približne vremenske oznake u formatu [MM:SS] iz originalnog transkripta kada referenciraš delove videa.`;
+  prompt += `Instrukcija: ${taskSpec.instruction} Odgovaraj na ${outputLanguage} jeziku (Respond in ${outputLanguage} language).`;
+  if (taskSpec.summary) {
+    prompt += ` Na početku stavi jednu rečenicu sa prefiksom 'TL;DR:' koja sažima ceo video.`;
+  }
+  if (taskSpec.parseAs !== 'json') {
+    prompt += ` Zadrži postojeće vremenske oznake u formatu [MM:SS] kada referenciraš delove videa. Ne izmišljaj vremenske oznake.`;
+  }
   if (taskSpec.persona && PERSONA_PROMPTS[taskSpec.persona]) {
     prompt += `\n\nTON I STIL: ${PERSONA_PROMPTS[taskSpec.persona]}`;
   } else if (taskSpec.persona && !Object.prototype.hasOwnProperty.call(PERSONA_PROMPTS, taskSpec.persona)) {

@@ -3,6 +3,10 @@
 
 function initChat(config, transcript, messagesEl, inputEl, sendBtnEl) {
   const chatHistory = [];
+  let sending = false;
+  const available = Boolean(config && transcript);
+  inputEl.disabled = !available;
+  sendBtnEl.disabled = !available;
 
   function appendMessage(role, text) {
     const msgDiv = document.createElement('div');
@@ -14,8 +18,9 @@ function initChat(config, transcript, messagesEl, inputEl, sendBtnEl) {
 
   async function sendMessage() {
     const text = inputEl.value.trim();
-    if (!text || !transcript || !config) return;
+    if (!text || !available || sending) return;
 
+    sending = true;
     inputEl.value = "";
     sendBtnEl.disabled = true;
     appendMessage('user', text);
@@ -26,9 +31,10 @@ function initChat(config, transcript, messagesEl, inputEl, sendBtnEl) {
       chatHistory.push({ role: "user", parts: [{ text: text }] });
       chatHistory.push({ role: "model", parts: [{ text: result.text }] });
     } catch (e) {
-      appendMessage('model', "Greška: " + e.message);
+      appendMessage('model', getLocalizedString('status_error', config.uiLanguage || 'en') + e.message);
     } finally {
       sendBtnEl.disabled = false;
+      sending = false;
     }
   }
 
@@ -40,4 +46,8 @@ function initChat(config, transcript, messagesEl, inputEl, sendBtnEl) {
       sendMessage();
     }
   });
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { initChat };
 }

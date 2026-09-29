@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="sr-Latn">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>YT Summary AI — izveštaj pregleda i refaktorisanja</title>
+<style>
+:root{--ink:#14283c;--muted:#53667b;--line:#dce5ec;--paper:#fff;--bg:#f2f6f9;--accent:#087c70;--navy:#102e45;--soft:#e7f5f1}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif}header{background:var(--navy);color:white;padding:54px max(24px,calc((100vw - 1040px)/2)) 42px}header p{color:#c1d3df;max-width:760px}.eyebrow{font-size:13px;letter-spacing:1.4px;text-transform:uppercase;color:#80daca}h1{max-width:830px;font-size:clamp(30px,5vw,48px);line-height:1.14;letter-spacing:-1.5px;margin:14px 0 18px}h2{font-size:25px;line-height:1.3;margin:0 0 14px}h3{font-size:18px;margin:24px 0 8px}main{max-width:1088px;margin:auto;padding:26px 24px 50px}nav{display:flex;flex-wrap:wrap;gap:10px 24px;padding:12px 0 22px}a{color:var(--accent);text-underline-offset:3px}nav a{font-size:14px}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:0 0 28px}.metric{background:white;border:1px solid var(--line);border-radius:12px;padding:19px}.metric strong{display:block;font-size:29px;line-height:1.2}.metric span{font-size:13px;color:var(--muted)}section{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:28px;margin:20px 0}p{margin:10px 0;color:var(--muted)}.number{color:var(--accent);font-size:14px;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px}.note{border-left:4px solid var(--accent);background:var(--soft);padding:14px 18px;border-radius:0 8px 8px 0;color:#254e49}.table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px;text-align:left}th{background:#f0f5f8;color:#38526a;font-weight:650}td,th{padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top}td:first-child{min-width:140px;color:var(--ink);font-weight:600}code{font:12px/1.6 ui-monospace,Consolas,monospace;background:#edf2f6;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}.files{font-size:13px;color:var(--muted);margin:20px 0 0}li{margin:8px 0;color:var(--muted)}.pass{color:#08705e;font-weight:700}.tag{display:inline-block;color:#073e37;background:#b0ead9;border-radius:30px;padding:5px 13px;font-size:13px;font-weight:650}details{margin:18px 0 0;padding-top:16px;border-top:1px solid var(--line)}summary{cursor:pointer;font-weight:650;color:var(--ink)}footer{padding:10px 0;color:var(--muted);font-size:13px}@media(max-width:700px){header{padding:32px 20px}.metrics{grid-template-columns:repeat(2,1fr)}main{padding:18px 16px}section{padding:22px 18px}td,th{padding:10px}h1{letter-spacing:-.7px}}@media print{body{background:white;font-size:11px}header{background:white;color:var(--ink);padding:0}header p,.eyebrow{color:var(--muted)}main{padding:0;max-width:none}nav{display:none}section{break-inside:avoid;padding:16px;border-color:#aaa}.metrics{margin-top:18px}.metric strong{font-size:22px}table{font-size:10px}a{color:inherit}details{display:block}.tag{background:none;border:1px solid #aaa}}
+</style></head>
+<body>
+<header><div class="eyebrow">YT Summary AI · 4.4.1 · 29. septembar 2026.</div>
+<h1>Pregled celog projekta, čišćenje i refaktorisanje</h1>
+<p>Posao je podeljen na tri logičke oblasti i predat trima subagentima. Glavni agent je povezao izmene, dodatno proverio browser skripte, obnovio dokumentaciju i obavio završne provere.</p>
+<span class="tag">Provere prošle · 128 / 128 testa</span></header>
+<main>
+<nav aria-label="Sadržaj izveštaja"><a href="#ui">Interfejs i tokovi</a><a href="#pipeline">Podaci i AI</a><a href="#tooling">Testovi i alati</a><a href="#verification">Provere</a><a href="#limits">Ograničenja</a></nav>
+<div class="metrics">
+<div class="metric"><strong>3</strong><span>oblasti / tri subagenta</span></div>
+<div class="metric"><strong>14.436</strong><span>dependency fajlova van Git praćenja</span></div>
+<div class="metric"><strong>128</strong><span>testova · 17 test baterija</span></div>
+<div class="metric"><strong>0</strong><span>npm audit ranjivosti posle zakrpa</span></div>
+</div>
+<div class="note">Zatečene izmene su sačuvane i nadograđene. Nije napravljen commit niti izvršen reset. Uklanjanje <code>node_modules</code> iz Git indeksa je pripremljeno za commit; lokalni paketi ostaju instalirani. Ovaj izveštaj opisuje konkretno urađene popravke, a ne pripisuje zatečene izmene novom pregledu.</div>
+<section id="ui"><div class="number">Deo 1 · UI i korisnički tokovi</div><h2>Rezultati pripadaju svom videu; AI tekst se prikazuje bez HTML injekcije</h2>
+<div class="table-wrap"><table><thead><tr><th>Problem</th><th>Urađena promena i efekat</th></tr></thead><tbody>
+<tr><td>HTML iz AI odgovora</td><td>TL;DR, entiteti, naziv modela i drugi tekstovi escape-uju se pre umetanja. Kviz se gradi DOM metodama. <code>DOMParser</code> dobio je dodatnu sanitizaciju: samo parsiranje HTML-a nije uklanjalo event handlere.</td></tr>
+<tr><td>Mešanje videa između tabova</td><td>Svaka analiza dobija <code>yt_result_&lt;UUID&gt;</code> snapshot rezultata i transkripta, a stranica se otvara sa svojim ID-jem. Kopiranje, regeneracija i entiteti koriste taj snapshot. Stari rezultat bez pouzdano povezanog transkripta nema aktivne transcript akcije.</td></tr>
+<tr><td>Istovremeni poslovi liste</td><td>Batch posao ima zaseban session ključ i ID stranice; privremeni posao briše se po završetku. Konfiguracija sa ključem ne ostaje u trajnom batch zapisu.</td></tr>
+<tr><td>Chat i kviz</td><td>Chat blokira drugi zahtev dok prethodni traje i prosleđuje izabrani jezik. Kviz proverava strukturu pitanja, opcija i tačnog indeksa; odvojene radio grupe sprečavaju mešanje više kvizova.</td></tr>
+<tr><td>Prikaz i podešavanja</td><td>Uklonjeni dupli TL;DR i mrtvi entity/SponsorBlock/usage kontejneri. Popravljena vidljivost kartica, očuvana sampling vrednost nula, poboljšani prevodi dinamičkog interfejsa i greške kopiranja. Štampa i uski ekrani su sređeni; uklonjen je spoljašnji Google Fonts zahtev.</td></tr>
+<tr><td>Markdown i vremenski linkovi</td><td>Kod je zaštićen od transformacija za bold/timestamp; liste ne menjaju običan tekst sa slovima „OLI”. Prazan tekst ima nula reči. YouTube linkovi koriste <code>URL.searchParams</code>, tako da rade i na <code>youtu.be</code> i uz postojeće parametre.</td></tr>
+</tbody></table></div>
+<p class="files">Pregledani: <code>popup.*</code>, <code>result.*</code>, <code>playlist.*</code>, <code>chat.js</code>, <code>quiz.js</code>, <code>summary-renderer.js</code>, <code>markdown-renderer.js</code>, <code>i18n.js</code>.</p>
+</section>
+<section id="pipeline"><div class="number">Deo 2 · Transkript, filtriranje i AI</div><h2>Ograničeni zahtevi, ispravno parsiranje i zajednički pipeline</h2>
+<div class="table-wrap"><table><thead><tr><th>Problem</th><th>Urađena promena i efekat</th></tr></thead><tbody>
+<tr><td>JSON zadaci dobijali TL;DR</td><td>Instrukcija za sažetak je eksplicitna opcija. Chat, entiteti i kviz više ne dobijaju obavezni TL;DR, a JSON zadaci ne dobijaju zahteve za Markdown/vremenske oznake.</td></tr>
+<tr><td>Gemini transport</td><td>Temperature/topP se zaista šalju. Parsiraju se svi tekstualni delovi, razlikuju se blokiran/prazan odgovor i greške, proveravaju se JSON strukture, a thinking tokeni ulaze u izlaznu potrošnju.</td></tr>
+<tr><td>Negativan kontekst i dugi video</td><td>Pozitivan kontekst i bezbedno deljenje sprečavaju beskonačnu petlju. Dodatno grupno sažimanje smanjuje velike zbirne sažetke; ako ne stanu, dobija se jasna greška umesto tihog gubitka kraja videa.</td></tr>
+<tr><td>Dohvat koji ne završava</td><td>MAIN dohvat ima deadline 8 s. Pobeda ili završetak prekida ostale zahteve, DOM čekanja i posmatrače. Player podaci proveravaju video ID da stari SPA odgovor ne bude keširan za drugi video.</td></tr>
+<tr><td>Kopirano parsiranje u testu</td><td>Regex sanitizer zamenjen je stvarnim JSON/XML parsiranjem u injected funkciji. Testovi pokreću taj kod; obuhvaćeni su XML <code>text</code>, timed-text <code>p</code>, entiteti i kratki titlovi.</td></tr>
+<tr><td>SponsorBlock brisao previše</td><td>Nevalidni rasponi se odbacuju. Titl se uklanja kada je najmanje polovina njegovog trajanja u sponzorskom rasponu; mali presek više ne briše celu rečenicu. Unije raspona sprečavaju duplo brojanje vremena.</td></tr>
+<tr><td>Dupliran pipeline liste</td><td>Lista koristi zajedničke <code>getSponsorSegments</code> i <code>processTranscriptSegments</code> za validaciju, filtriranje, vreme i formatiranje. Rezervni prozor zatvara se i pri grešci.</td></tr>
+<tr><td>Statistika i cena</td><td>Upisi potrošnje serijalizovani su unutar jedne stranice; kvar skladišta ne baca već dobijeni AI odgovor. Zadržani su postojeći dozvoljeni modeli, a cena 3.7 Flash uključuje objavljeni prelaz od 01.01.2027.</td></tr>
+</tbody></table></div>
+<p>Cene i nazivi modela provereni su u <a href="https://ai.google.dev/gemini-api/docs/models">zvaničnoj listi modela</a> i <a href="https://ai.google.dev/gemini-api/docs/pricing">Gemini cenovniku</a> 29.09.2026. Cena u aplikaciji ostaje procena, uz razlike besplatnog nivoa i uslova naloga.</p>
+<p class="files">Pregledani i sređeni: <code>gemini.js</code>, <code>prompts.js</code>, <code>transcript-fetcher.js</code>, <code>transcript-pipeline.js</code> i pripadajući testovi.</p>
+</section>
+<section id="tooling"><div class="number">Deo 3 · Testovi, repo i pakovanje</div><h2>Manje nepotrebnih fajlova i provere koje ispituju aplikaciju</h2>
+<ul>
+<li><strong>14.436 dependency fajlova uklonjeno je iz Git praćenja.</strong> To je oko 1,98 miliona vendor linija. Dodati su ignore obrasci za dependencies, ZIP/XPI, logove, coverage i lokalni npm cache. Izvorni kod i lokalni razvojni paketi nisu obrisani.</li>
+<li><strong>Uklonjena je neupotrebljena direktna zavisnost <code>globals</code>.</strong> Lock fajl je usklađen. Bezbednosne zakrpe unutar deklarisanih raspona spustile su npm audit sa osam visokih nalaza na nulu; web-ext je ažuriran na 10.7.0.</li>
+<li><strong>ESLint proverava i testove.</strong> Ranije su bili izuzeti. Jest pravila važe za testove, a Jest pretražuje samo <code>tests/</code>. Uočene lint greške u testovima su popravljene.</li>
+<li><strong>Izbačene su provere kopirane implementacije.</strong> TL;DR i računanje čitanja testiraju <code>renderSummaryCard</code>; transcript testovi pozivaju injected funkciju. Testovi brzog puta koriste fake timere i proveravaju redosled završavanja umesto krhkih pragova stvarnog vremena.</li>
+<li><strong>Dodate su regresije za stvarne greške.</strong> XSS, rad sa odvojenim rezultatima, paralelni chat, nevalidan kviz, sampling nula, prazni odgovori, timeout, keš, preklopi, dugi transkripti i datum promene cene.</li>
+<li><strong>Pakovanje pravi ZIP, pa XPI.</strong> Skript koristi sopstveni direktorijum, eksplicitne runtime resurse i privremenu arhivu. Četiri integration testa proveravaju stvarni paket, reference resursa, rad iz drugog direktorijuma i očuvanje prethodnog paketa pri grešci.</li>
+<li><strong>Obnovljena je dokumentacija.</strong> README i tehnička dokumentacija prate konačni kod. <code>docs.html</code> je skraćen, radi bez Mermaid/CDN skripte i više ne obećava precizno sečenje govora niti dostupnost svih transkripata.</li>
+</ul>
+<details><summary>Šta je zadržano i zašto</summary><p>Zadržani su sažeci, chat, kviz, entiteti, ključne reči, persone, više jezika, lista i izvozi — to su stvarne funkcije proizvoda. Postojeći <code>GEMINI.md</code>, korisnički <code>opencode.json</code>, ikona i korisni stilovi nisu uklanjani samo zato što ih test ne pokriva. Arhitektura ostaje jednostavna browser ekstenzija bez uvođenja framework-a ili background servisa.</p></details>
+</section>
+<section id="verification"><div class="number">Završna verifikacija</div><h2>Rezultati provera</h2>
+<div class="table-wrap"><table><thead><tr><th>Provera</th><th>Rezultat</th><th>Šta potvrđuje</th></tr></thead><tbody>
+<tr><td><code>npm ci</code></td><td class="pass">PROŠLO</td><td>Čista instalacija iz lock fajla; 671 paket.</td></tr>
+<tr><td><code>npm test -- --runInBand</code></td><td class="pass">128 / 128 · PROŠLO</td><td>ESLint i 128 testova u 17 baterija.</td></tr>
+<tr><td>Browser-page smoke test</td><td class="pass">3 / 3</td><td>Tri stvarne HTML stranice i script redosled u JSDOM-u, bez CommonJS okruženja.</td></tr>
+<tr><td>XPI integration testovi</td><td class="pass">4 / 4</td><td>Arhiva, resursi, verzija i bezbedna zamena prethodnog paketa.</td></tr>
+<tr><td><code>npm run lint</code></td><td class="pass">PROŠLO</td><td>web-ext: nula grešaka, upozorenja i notices.</td></tr>
+<tr><td><code>npm audit</code></td><td class="pass">0 ranjivosti</td><td>Audit celog dependency stabla; osam high nalaza je zakrpljeno.</td></tr>
+<tr><td><code>npm run package</code></td><td class="pass">PROŠLO</td><td><code>yt-summary-firefox.xpi</code>, 19 runtime fajlova, bez testova, dokumentacije i dependencies.</td></tr>
+<tr><td>HTML izveštaj</td><td class="pass">PROŠLO</td><td>Lokalni dokument, bez eksternih skripti; provereni sadržaj i prikaz.</td></tr>
+</tbody></table></div>
+</section>
+<section id="limits"><div class="number">Praktična ograničenja</div><h2>Šta ove provere ne potvrđuju</h2>
+<ul>
+<li><strong>Nije izvršena live instalacija u Firefoxu niti plaćeni AI poziv.</strong> API i browser granice u testovima su mockovane. YouTube može promeniti interne objekte, DOM ili ograničenja pristupa; potrebna je ručna proba ekstenzije sa stvarnim videom.</li>
+<li><strong>Popup i rezultat upravljaju aktivnim poslom.</strong> Zatvaranje stranice može prekinuti analizu; nije uveden background worker. Session rezultati nestaju po završetku browser sesije, a snapshotovi otvorenih analiza nemaju cleanup pri zatvaranju pojedinačnog taba.</li>
+<li><strong>Zbirna potrošnja nije transakcija između tabova.</strong> Serijalizacija radi unutar jedne stranice; dva taba koja istovremeno menjaju ukupnu statistiku i dalje mogu izgubiti deo zbira.</li>
+<li><strong>Kontekst se procenjuje po karakterima.</strong> Velike instrukcije i istorija chata mogu preći stvarni token limit. SponsorBlock filtrira cele titlove po pravilu većinskog preklopa, a ne pojedinačne reči.</li>
+<li><strong>Lista obuhvata trenutno pronađene video ID-jeve.</strong> Ne garantuje automatsko učitavanje cele duge YouTube liste. Za direktan dohvat koristi interne YouTube strukture i rezervni prozor koji i dalje čeka šest sekundi da se stranica učita. Markdown renderer podržava ograničen postojeći podskup formata.</li>
+<li><strong>Razvojni alati imaju deprecation obaveštenja.</strong> Npm audit je čist; veliki prelazak sa ESLint 8 na novi format nije uveden bez potrebe. Web-ext update checker može prijaviti nemogućnost upisa svog globalnog cache-a, bez uticaja na lint rezultat.</li>
+</ul>
+</section>
+<footer>Dokumenti: <a href="README.md">README</a> · <a href="DOCUMENTATION.md">Tehnička dokumentacija</a> · <a href="docs.html">Korisničko objašnjenje</a>. Izveštaj je samostalan HTML i može da se odštampa ili sačuva kao PDF iz browser-a.</footer>
+</main></body></html>
