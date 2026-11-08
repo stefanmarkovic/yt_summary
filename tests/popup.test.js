@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { LLM_PROVIDERS, normalizeLlmConfig } = require('../gemini.js');
+const { DEFAULT_MODEL, normalizeLlmConfig } = require('../llm.js');
 const { getLocalizedString, localizePage } = require('../i18n.js');
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -11,7 +11,7 @@ describe('Popup UI interactions', () => {
   let store;
   beforeEach(async () => {
     document.body.innerHTML = fs.readFileSync(path.join(__dirname, '..', 'popup.html'), 'utf8');
-    store = { llm_config: { apiKey: '123', provider: 'gemini', temperature: 0, topP: 0 } };
+    store = { llm_config: { apiKey: '123', provider: 'openrouter', model: 'mistralai/mistral-nemo', temperature: 0, topP: 0 } };
     global.browser = {
       runtime: { getManifest: () => ({ version: 'test' }), getURL: file => `moz-extension://test/${file}` },
       storage: {
@@ -21,7 +21,7 @@ describe('Popup UI interactions', () => {
       tabs: { query: jest.fn().mockResolvedValue([{ id: 1, url: 'https://youtube.com/watch?v=abcdefghijk', title: 'Test - YouTube' }]), create: jest.fn().mockResolvedValue({}) },
       scripting: { executeScript: jest.fn().mockRejectedValue(new Error('Permission denied')) }
     };
-    global.LLM_PROVIDERS = LLM_PROVIDERS;
+    global.DEFAULT_MODEL = DEFAULT_MODEL;
     global.normalizeLlmConfig = normalizeLlmConfig;
     global.getLocalizedString = getLocalizedString;
     global.localizePage = localizePage;
@@ -37,14 +37,21 @@ describe('Popup UI interactions', () => {
     expect(document.getElementById('main-view').classList.contains('hidden')).toBe(false);
   });
 
-  test('provider changes update endpoint and editable model together', () => {
-    const select = document.getElementById('llm-provider');
-    select.value = 'openrouter';
-    select.dispatchEvent(new Event('change'));
-    expect(document.getElementById('api-url-input').value).toBe(LLM_PROVIDERS.openrouter.url);
-    expect(document.getElementById('api-model-input').value).toBe(LLM_PROVIDERS.openrouter.defaultModel);
-    expect(document.getElementById('api-model-input').readOnly).toBe(false);
-    expect(document.getElementById('gemini-model-wrapper').classList.contains('hidden')).toBe(true);
+  test('an OpenRouter config opens on the main view with its model and no migration notice', () => {
+    expect(document.getElementById('main-view').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('api-model-input').value).toBe('mistralai/mistral-nemo');
+    expect(document.getElementById('migration-notice').classList.contains('hidden')).toBe(true);
+  });
+
+  test('a saved Gemini config opens Settings, explains the change and drops the Google key', async () => {
+    document.body.innerHTML = fs.readFileSync(path.join(__dirname, '..', 'popup.html'), 'utf8');
+    store = { llm_config: { apiKey: 'google-key', provider: 'gemini', model: 'gemini-3.7-flash', uiLanguage: 'en' } };
+    await initializePopup();
+    expect(document.getElementById('setup-view').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('migration-notice').classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('api-key-input').value).toBe('');
+    expect(document.getElementById('api-model-input').value).toBe('openrouter/auto');
+    expect(store.llm_config).toMatchObject({ provider: 'openrouter', apiKey: '', model: 'openrouter/auto', uiLanguage: 'en' });
   });
 
   test('saving retains valid zero sampling values', async () => {

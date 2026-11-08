@@ -1,9 +1,9 @@
 const {
   normalizeLlmConfig, llmSummarizeLong, llmExtractEntities, llmQuiz, llmChat, cleanJsonResponse, chunkTranscript
-} = require('../gemini.js');
+} = require('../llm.js');
 
 describe('public LLM tasks', () => {
-  const config = normalizeLlmConfig({ provider: 'gemini', apiKey: 'test-key', contextWindow: 50 });
+  const config = normalizeLlmConfig({ provider: 'openrouter', apiKey: 'test-key', contextWindow: 50 });
   let storedUsage;
   beforeEach(() => {
     storedUsage = undefined;
@@ -18,8 +18,8 @@ describe('public LLM tasks', () => {
     jest.restoreAllMocks();
   });
   function answer(text, promptTokens = 2, outputTokens = 3) {
-    return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text }] } }],
-      usageMetadata: { promptTokenCount: promptTokens, candidatesTokenCount: outputTokens } }) };
+    return { ok: true, json: async () => ({ choices: [{ message: { content: text } }],
+      usage: { prompt_tokens: promptTokens, completion_tokens: outputTokens } }) };
   }
   test('quiz and entity requests keep JSON instructions free of summary format', async () => {
     global.fetch = jest.fn().mockResolvedValueOnce(answer('```json\n[" Tool ", "Tool", ""]\n```'))
@@ -28,7 +28,7 @@ describe('public LLM tasks', () => {
     const quiz = await llmQuiz(config, 'Question material');
     expect(JSON.parse(quiz.text)).toEqual([{ question: 'Question', options: ['A', 'B'], answerIndex: 0 }]);
     for (const [, options] of fetch.mock.calls) {
-      const prompt = JSON.parse(options.body).systemInstruction.parts[0].text;
+      const prompt = JSON.parse(options.body).messages[0].content;
       expect(prompt).not.toContain('TL;DR:');
     }
     expect(storedUsage.tokens).toBe(10);
@@ -42,10 +42,10 @@ describe('public LLM tasks', () => {
     global.fetch = jest.fn().mockResolvedValue(answer('An answer'));
     await llmChat(config, 'Transcript', [{ role: 'model', parts: [{ text: 'Prior reply' }] }], 'Why?');
     const request = JSON.parse(fetch.mock.calls[0][1].body);
-    expect(request.contents).toEqual([
-      { role: 'model', parts: [{ text: 'Prior reply' }] }, { role: 'user', parts: [{ text: 'Why?' }] }
+    expect(request.messages.slice(1)).toEqual([
+      { role: 'assistant', content: 'Prior reply' }, { role: 'user', content: 'Why?' }
     ]);
-    expect(request.systemInstruction.parts[0].text).not.toContain('TL;DR:');
+    expect(request.messages[0].content).not.toContain('TL;DR:');
   });
   test('usage storage failures do not discard a paid response', async () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -67,8 +67,8 @@ describe('public LLM tasks', () => {
     const transcript = 'x'.repeat(150) + 'END';
     const result = await llmSummarizeLong(config, transcript, '2', 'standard');
     expect(result).toMatchObject({ text: 'Final summary', usage: { promptTokens: 6, outputTokens: 9, totalTokens: 15 } });
-    expect(JSON.parse(fetch.mock.calls[1][1].body).systemInstruction.parts[0].text).toContain('END');
-    const finalPrompt = JSON.parse(fetch.mock.calls[2][1].body).systemInstruction.parts[0].text;
+    expect(JSON.parse(fetch.mock.calls[1][1].body).messages[0].content).toContain('END');
+    const finalPrompt = JSON.parse(fetch.mock.calls[2][1].body).messages[0].content;
     expect(finalPrompt).toContain('First part');
     expect(finalPrompt).toContain('Last part');
     expect(finalPrompt).toContain('TL;DR:');
@@ -85,7 +85,7 @@ describe('public LLM tasks', () => {
     const result = await llmSummarizeLong(config, 't'.repeat(151), '2', 'standard');
     expect(fetch).toHaveBeenCalledTimes(5);
     expect(result.usage.totalTokens).toBe(25);
-    const finalPrompt = JSON.parse(fetch.mock.calls[4][1].body).systemInstruction.parts[0].text;
+    const finalPrompt = JSON.parse(fetch.mock.calls[4][1].body).messages[0].content;
     expect(finalPrompt).toContain('Reduced first');
     expect(finalPrompt).toContain('Reduced last');
     expect(finalPrompt).not.toContain('TRANSKRIPT SKRAĆEN');
@@ -98,6 +98,14 @@ describe('public LLM tasks', () => {
   });
   test('JSON fence cleanup preserves literal backticks inside valid JSON strings', () => {
     expect(cleanJsonResponse('```JSON\n["Use ``` in Markdown"]\n```')).toBe('["Use ``` in Markdown"]');
+  });
+  test.each([
+    ['an unclosed fence', '```json\n["Glass Jar", "Filtered Water"]'],
+    ['a sentence around the JSON', 'Here is the list: ["Glass Jar", "Filtered Water"] Hope it helps.'],
+    ['plain JSON', '["Glass Jar", "Filtered Water"]']
+  ])('entities survive %s, as small OpenRouter models return', async (_case, text) => {
+    global.fetch = jest.fn().mockResolvedValue(answer(text));
+    await expect(llmExtractEntities(config, 'Tools')).resolves.toEqual(['Glass Jar', 'Filtered Water']);
   });
   test('chunking rejects non-progressing sizes and skips empty chunks', () => {
     expect(() => chunkTranscript('Transcript', -1)).toThrow(/positive/);

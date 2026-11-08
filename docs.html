@@ -12,13 +12,13 @@
 <section aria-labelledby="flow-title"><h2 id="flow-title">Tok podataka</h2><div class="flow">
 <div><strong>1. Transkript</strong><small>YouTube titlovi, InnerTube ili tekst sa stranice.</small></div>
 <div><strong>2. Filtriranje</strong><small>SponsorBlock rasponi i vremenske oznake.</small></div>
-<div><strong>3. AI odgovor</strong><small>Gemini ili OpenRouter; dugi tekst deli se u delove.</small></div>
+<div><strong>3. AI odgovor</strong><small>OpenRouter; dugi tekst deli se u delove.</small></div>
 <div><strong>4. Rezultat</strong><small>Sažetak, chat, kviz, promena detaljnosti i izvoz.</small></div>
 </div></section>
 <section><h2>Podešavanje i upotreba</h2><ol>
 <li>U Firefoxu otvorite <code>about:debugging#/runtime/this-firefox</code>, izaberite „Load Temporary Add-on” i učitajte <code>manifest.json</code>.</li>
-<li>U ekstenziji izaberite Gemini ili OpenRouter i unesite odgovarajući API ključ.</li>
-<li>Za Gemini dostupni su <code>gemini-3.7-flash</code> i <code>gemini-3.5-flash-lite</code>. OpenRouter koristi model slug, podrazumevano <code>openrouter/auto</code>.</li>
+<li>U ekstenziji unesite OpenRouter API ključ sa openrouter.ai/keys. Management ključ ne može da poziva modele.</li>
+<li>Model je OpenRouter slug, na primer <code>mistralai/mistral-nemo</code>, a podrazumevano <code>openrouter/auto</code>.</li>
 <li>Otvorite YouTube video, izaberite detaljnost, stil i jezik odgovora, pa pokrenite generisanje. Na stranici sa listom dostupna je i grupna obrada pronađenih videa.</li>
 </ol><p>Transkript mora da postoji. Ekstenzija ne transkribuje zvuk i ne garantuje dostupnost teksta za svaki video. Obrada liste obuhvata ID-jeve koje trenutno može da pronađe na stranici.</p></section>
 <section><h2>Dohvat i filtriranje</h2>
@@ -26,8 +26,8 @@
 <p>SponsorBlock je dopunski izvor: nedostupan servis ne sprečava sažimanje. Tekst titla ne može precizno da se podeli po izgovorenim rečima jer nemamo njihove vremenske oznake. Pravilo za izbor segmenata i obračun vremena opisano je u tehničkoj dokumentaciji.</p></section>
 <section><h2>Podaci i troškovi</h2><ul>
 <li>API ključ i podešavanja čuvaju se u lokalnom skladištu ekstenzije. Ključ se šalje izabranom AI provajderu kao deo autentifikacije.</li>
-<li>Transkript i vaša pitanja šalju se Gemini ili OpenRouter servisu radi generisanja odgovora; SponsorBlock dobija ID videa.</li>
-<li>Prikazana potrošnja zasniva se na podacima API odgovora. Gemini cena je procena plaćenog standardnog tarifa; besplatni nivo, keširanje i uslovi naloga mogu da promene stvarni račun.</li>
+<li>Transkript i vaša pitanja šalju se OpenRouter servisu radi generisanja odgovora; SponsorBlock dobija ID videa.</li>
+<li>Prikazana potrošnja je trošak koji OpenRouter javlja u odgovoru.</li>
 <li>AI odgovor može sadržati greške. Vremenske oznake otvaraju izvorni video i pomažu proveri tvrdnji.</li>
 </ul></section>
 <section><h2>Razvoj i provere</h2><p>Instalirajte razvojne zavisnosti komandom <code>npm ci</code>. <code>npm test -- --runInBand</code> proverava JavaScript i Jest testove; <code>npm run lint</code> proverava ekstenziju, a <code>npm run package</code> pravi XPI paket.</p>

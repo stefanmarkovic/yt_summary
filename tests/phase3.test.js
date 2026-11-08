@@ -77,3 +77,15 @@ describe('Phase 3 Advanced Features', () => {
     expect(chat).not.toContain('TL;DR:');
   });
 });
+
+describe('output language instruction', () => {
+  test.each([
+    ['Srpski', 'Serbian (Latin script)'],
+    ['Deutsch', 'German'],
+    ['Español', 'Spanish'],
+    ['English', 'English']
+  ])('%s is requested by its English name as the final rule of the prompt', (stored, name) => {
+    const prompt = buildSystemInstruction('Transcript in English', { instruction: 'Summarize.', persona: 'skeptic', outputLanguage: stored });
+    expect(prompt.trim().split('\n').pop()).toBe(`LANGUAGE: Write the entire response in ${name}, even if the transcript is in another language.`);
+  });
+});

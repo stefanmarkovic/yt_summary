@@ -1,6 +1,6 @@
 # YT Summary AI — tehnička dokumentacija
 
-Firefox Manifest V3 ekstenzija, verzija 4.4.1. Nema background worker-a: popup pokreće analizu, a stranice rezultata i liste upravljaju svojim aktivnim zahtevima. Zatvaranje tih stranica može prekinuti posao.
+Firefox Manifest V3 ekstenzija, verzija 4.5.0. Nema background worker-a: popup pokreće analizu, a stranice rezultata i liste upravljaju svojim aktivnim zahtevima. Zatvaranje tih stranica može prekinuti posao.
 
 ## Granice modula
 
@@ -10,7 +10,7 @@ Firefox Manifest V3 ekstenzija, verzija 4.4.1. Nema background worker-a: popup p
 | `transcript-fetcher.js` | Samostalna `fetchTranscriptInPageContext(videoId)`, ubrizgana preko `scripting.executeScript({world: "MAIN"})`; vraća `{status, segments, chapters, debugLines}`. Sva potrebna logika je unutar funkcije jer Firefox serijalizuje funkciju za page kontekst. |
 | `transcript-pipeline.js` | `getProcessedTranscript(tabId, videoId)`, `getSponsorSegments(videoId)` i zajednička `processTranscriptSegments(segments, sponsors, chapters, debugLines)`. Dohvat, validacija, filtriranje, formatiranje i session keš. |
 | `prompts.js` | `buildSystemInstruction(transcript, taskSpec)` i `resolvePersona(value, customPrompts)`. TL;DR je uključen samo za zadatke sa `summary: true`; JSON zadaci ne dobijaju instrukcije za Markdown ili vremenske oznake. |
-| `gemini.js` | Konfiguracija dozvoljenih provajdera, autentifikacija, transport, retry, parsiranje odgovora, potrošnja i zadaci: sažetak, dugi sažetak, entiteti, kviz i chat. |
+| `llm.js` | OpenRouter konfiguracija i migracija starih podešavanja, autentifikacija, transport, retry, parsiranje odgovora, potrošnja i zadaci: sažetak, dugi sažetak, entiteti, kviz i chat. |
 | `markdown-renderer.js` | `escapeHtml`, `markdownToHtml`, `setSafeHTML`. Tekst se escape-uje, kod se štiti od Markdown transformacija, a umetnuti HTML se dodatno sanitizuje. |
 | `summary-renderer.js` | Zajednička kartica za rezultat i listu: TL;DR, tekst, entiteti, SponsorBlock statistika, potrošnja i YouTube timestamp linkovi. |
 | `result.js` | Učitava snapshot sa svojim ID-jem; kopiranje, izvoz, regeneracija i izdvajanje entiteta koriste taj rezultat. |
@@ -41,14 +41,11 @@ Session keš čuva poslednji obrađeni video do šest sati. Nevalidan, budući i
 
 ## AI zahtevi
 
-Provajderi su fiksni:
+Jedini provajder je OpenRouter: `https://openrouter.ai/api/v1/chat/completions`, header `Authorization: Bearer`, slobodan model slug i podrazumevani `openrouter/auto`. URL je konstanta u kodu i ne čuva se u podešavanjima.
 
-- Gemini: `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`, header `x-goog-api-key`, modeli `gemini-3.7-flash` i `gemini-3.5-flash-lite`.
-- OpenRouter: `https://openrouter.ai/api/v1/chat/completions`, header `Authorization: Bearer`, slobodan model slug i podrazumevani `openrouter/auto`.
+Podešavanja sa provajderom `gemini` ili drugim uklonjenim provajderom gube ključ i model pri otvaranju popup-a, jer OpenRouter ne prihvata Google ključ. Popup tada otvara Settings i prikazuje napomenu `gemini_removed`. OpenRouter podešavanja ostaju nepromenjena. Konfiguracija normalizuje pozitivan kontekst i opsege temperature/topP; nula je validna vrednost za sampling.
 
-Transport odbija druge provajdere i proizvoljne URL-ove. Migracija starih podešavanja čuva kompatibilan ključ za dozvoljenog provajdera, a briše ključ uklonjenog provajdera. Konfiguracija normalizuje pozitivan kontekst i opsege temperature/topP; nula je validna vrednost za sampling.
-
-Rok pojedinačnog AI zahteva je 180 s. HTTP 502/503/504 imaju do dva ponavljanja sa eksponencijalnim odlaganjem; ostale greške i timeout prikazuju se pozivaocu. Parsiranje spaja tekstualne delove Gemini odgovora i razlikuje odgovor bez teksta/safety block od sintaksne greške. JSON tekst se čisti od spoljnog code fence-a, a entiteti i kviz dodatno proveravaju očekivanu strukturu.
+Rok pojedinačnog AI zahteva je 180 s. HTTP 502/503/504 imaju do dva ponavljanja sa eksponencijalnim odlaganjem; ostale greške i timeout prikazuju se pozivaocu. HTTP 401 objašnjava da treba API ključ, a ne management ključ. HTTP 402 prijavljuje potrošen kredit ili limit ključa. Ostale greške prikazuju `error.message` iz OpenRouter odgovora. Odgovor bez teksta navodi `finish_reason`. JSON tekst se čisti od code fence-a, i kad ograda nije zatvorena, i od teksta oko JSON-a, a entiteti i kviz dodatno proveravaju očekivanu strukturu.
 
 Dugi transkript se deli približno po rečenicama/rečima i sažima redom. Ako zbir delimičnih sažetaka ne staje u kontekst, grupno se dodatno sažima do četiri prolaza. Ako se tekst ne smanjuje ili i dalje ne staje, prikazuje se greška umesto tihog odbacivanja poslednjih delova videa. Broj karaktera je približna procena tokena, a ne tokenizacija provajdera; veoma velika istorija chata i instrukcije i dalje mogu prekoračiti limit.
 
@@ -69,19 +66,9 @@ Stranica rezultata ne dobija API ključ u sačuvanom rezultatu; za novi zahtev u
 
 Upis potrošnje serijalizovan je unutar jedne stranice i kvar skladišta ne odbacuje već dobijen AI odgovor. Ne postoji globalna transakcija između više otvorenih stranica: istovremeni read/modify/write zahtevi u različitim tabovima mogu izgubiti deo zbirne statistike. Prikazana potrošnja pojedinačnog odgovora ostaje dostupna.
 
-## Cena i izvori
+## Cena
 
-Na datum provere 29.09.2026. plaćeni standardni Gemini tarif je, po milion tokena:
-
-| Model | Ulaz | Izlaz, uključujući thinking tokene |
-| --- | --- | --- |
-| Gemini 3.7 Flash, do 31.12.2026. | $0.75 | $3.75 |
-| Gemini 3.7 Flash, od 01.01.2027. | $1.50 | $7.50 |
-| Gemini 3.5 Flash-Lite | $0.30 | $2.50 |
-
-Kod uključuje prelaz cene 3.7 Flash od 2027. i thinking tokene u izlaznu potrošnju. OpenRouter koristi prijavljeni trošak kada ga odgovor sadrži; ako izostane, prikazana vrednost nije pouzdan račun. Besplatni nivo, caching, popusti i buduće promene tarife nisu obračun provajdera.
-
-Izvori: [zvanični Gemini modeli](https://ai.google.dev/gemini-api/docs/models) i [Gemini cenovnik](https://ai.google.dev/gemini-api/docs/pricing), provereni 29.09.2026.
+Cenu svakog odgovora javlja OpenRouter u `usage.cost`, a ekstenzija je prikazuje i sabira u `total_usage`. Ako polje izostane, prikazuje se 0. Izlazni jezik se u prompt šalje engleskim imenom (`Srpski` postaje `Serbian (Latin script)`) kao poslednje pravilo, jer manji modeli inače odgovaraju na jeziku transkripta.
 
 ## Testovi i pakovanje
 

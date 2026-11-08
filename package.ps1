@@ -16,7 +16,7 @@ $files = @(
     "result.css",
     "playlist.html",
     "playlist.js",
-    "gemini.js",
+    "llm.js",
     "transcript-fetcher.js",
     "transcript-pipeline.js",
     "markdown-renderer.js",

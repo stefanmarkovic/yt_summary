@@ -1,25 +1,18 @@
 // YT Summary AI - popup.js
 const PLUGIN_VERSION = (typeof browser !== 'undefined' && browser.runtime?.getManifest)
   ? browser.runtime.getManifest().version
-  : "4.4";
-
-const PRESETS = LLM_PROVIDERS;
+  : "4.5";
 
 async function initializePopup() {
   const setupView = document.getElementById('setup-view');
   const mainView = document.getElementById('main-view');
 
-  const providerSelect = document.getElementById('llm-provider');
-  const geminiModelWrapper = document.getElementById('gemini-model-wrapper');
-  const geminiModelSelect = document.getElementById('gemini-model-select');
-  const apiUrlInput = document.getElementById('api-url-input');
   const apiModelInput = document.getElementById('api-model-input');
   const apiKeyInput = document.getElementById('api-key-input');
 
   const contextWindowInput = document.getElementById('context-window-input');
   const temperatureInput = document.getElementById('temperature-input');
   const topPInput = document.getElementById('top-p-input');
-  const advancedSettingsWrapper = document.getElementById('advanced-settings-wrapper');
 
   const saveKeyBtn = document.getElementById('save-key-btn');
   const cancelBtn = document.getElementById('cancel-btn');
@@ -61,39 +54,6 @@ async function initializePopup() {
     log("Statistika resetovana.");
   });
 
-  function updateVisibility() {
-    if (providerSelect.value === 'gemini') {
-      geminiModelWrapper.classList.remove('hidden');
-      advancedSettingsWrapper.classList.add('hidden');
-      apiModelInput.readOnly = true;
-    } else {
-      geminiModelWrapper.classList.add('hidden');
-      advancedSettingsWrapper.classList.remove('hidden');
-      apiModelInput.readOnly = false;
-    }
-  }
-
-  // Handle Provider Select
-  providerSelect.addEventListener('change', () => {
-    const p = providerSelect.value;
-    if (PRESETS[p]) {
-      apiUrlInput.value = PRESETS[p].url;
-      if (p === 'gemini') {
-        apiModelInput.value = geminiModelSelect.value;
-      } else {
-        apiModelInput.value = PRESETS[p].defaultModel;
-      }
-    }
-
-    updateVisibility();
-  });
-
-  geminiModelSelect.addEventListener('change', () => {
-    if (providerSelect.value === 'gemini') {
-      apiModelInput.value = geminiModelSelect.value;
-    }
-  });
-
   // Load Settings
   let config = {};
   try {
@@ -103,7 +63,8 @@ async function initializePopup() {
     log("Error loading config: " + e.message);
   }
 
-  // Migrate legacy Gemini Lite and replace removed providers with safe defaults.
+  // Configs from the Gemini era lose their Google key: OpenRouter cannot use it.
+  const migratedFromGemini = config.provider !== undefined && config.provider !== 'openrouter';
   const normalizedConfig = normalizeLlmConfig(config);
   if (JSON.stringify(normalizedConfig) !== JSON.stringify(config)) {
     config = normalizedConfig;
@@ -111,8 +72,7 @@ async function initializePopup() {
   }
 
   // Initialize UI with config
-  providerSelect.value = config.provider || 'gemini';
-  apiUrlInput.value = PRESETS[providerSelect.value].url;
+  apiModelInput.value = config.model || DEFAULT_MODEL;
   apiKeyInput.value = config.apiKey || '';
   contextWindowInput.value = config.contextWindow || 32768;
   temperatureInput.value = config.temperature ?? 0.7;
@@ -194,26 +154,14 @@ async function initializePopup() {
     await browser.storage.local.set({ llm_config: config });
   });
 
-  if (providerSelect.value === 'gemini') {
-    const savedModel = config.model || geminiModelSelect.value;
-    const optionExists = Array.from(geminiModelSelect.options).some(opt => opt.value === savedModel);
-    if (optionExists) {
-      geminiModelSelect.value = savedModel;
-    }
-    apiModelInput.value = geminiModelSelect.value;
-  } else {
-    apiModelInput.value = config.model || PRESETS[providerSelect.value].defaultModel;
-  }
-
   if (!config.apiKey) {
     showView('setup');
   }
-  updateVisibility();
+  document.getElementById('migration-notice').classList.toggle('hidden', !migratedFromGemini);
 
   saveKeyBtn.addEventListener('click', async () => {
     const newConfig = normalizeLlmConfig({
-      provider: providerSelect.value,
-      url: PRESETS[providerSelect.value].url,
+      provider: 'openrouter',
       model: apiModelInput.value.trim(),
       apiKey: apiKeyInput.value.trim(),
       contextWindow: parseInt(contextWindowInput.value) || 32768,

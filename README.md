@@ -1,6 +1,6 @@
 # YT Summary AI
 
-Firefox ekstenzija (Manifest V3, verzija 4.4.1) za sažimanje YouTube videa pomoću Google Gemini ili OpenRouter servisa. Jezik interfejsa i jezik AI odgovora biraju se nezavisno.
+Firefox ekstenzija (Manifest V3, verzija 4.5.0) za sažimanje YouTube videa pomoću OpenRouter servisa. Jezik interfejsa i jezik AI odgovora biraju se nezavisno.
 
 ## Šta podržava
 
@@ -17,8 +17,8 @@ Ekstenzija ne prepoznaje govor iz zvuka: video mora imati dostupan transkript. G
 
 1. U Firefoxu otvorite `about:debugging#/runtime/this-firefox`.
 2. Kliknite **Load Temporary Add-on** i izaberite `manifest.json`.
-3. U podešavanjima izaberite provajdera i unesite njegov API ključ.
-4. Za Gemini izaberite `gemini-3.7-flash` ili `gemini-3.5-flash-lite`. Za OpenRouter unesite model slug ili koristite `openrouter/auto`.
+3. U podešavanjima unesite OpenRouter API ključ sa openrouter.ai/keys. Management ključ ne može da poziva modele.
+4. Unesite model slug, na primer `mistralai/mistral-nemo`, ili ostavite `openrouter/auto`.
 5. Otvorite YouTube video, podesite detaljnost, stil i jezik odgovora, pa pokrenite generisanje.
 
 Ključ i podešavanja ostaju u lokalnom skladištu ekstenzije. Transkript i pitanja šalju se izabranom AI servisu; SponsorBlock dobija ID videa. Prikazana cena je procena, a stvarni račun zavisi od provajdera i uslova naloga.
@@ -44,7 +44,7 @@ npm run package
 | --- | --- |
 | Podešavanja i pokretanje | `popup.js`, `popup.html`, `popup.css` |
 | Dohvat i filtriranje | `transcript-fetcher.js`, `transcript-pipeline.js` |
-| AI transport i instrukcije | `gemini.js`, `prompts.js` |
+| AI transport i instrukcije | `llm.js`, `prompts.js` |
 | Rezultat i lista | `result.js/html/css`, `playlist.js/html` |
 | Bezbedan prikaz | `markdown-renderer.js`, `summary-renderer.js` |
 | Dodatne funkcije | `chat.js`, `quiz.js`, `i18n.js` |
