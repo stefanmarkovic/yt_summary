@@ -7,7 +7,7 @@ On a YouTube watch page, the user opens the popup, picks the output language, de
 - `summarize-run` the popup "Generate summary" opens `result.html?id=<uuid>` with the summary for the active video.
 - `summarize-options` `#output-language`, `#detail-level` (1/2/3) and `#persona-level` (standard, skeptic, educator, journalist, `custom_N`) reach the LLM request.
 - `summarize-not-youtube` on a non-YouTube active tab the popup status shows the "not a YouTube video" error and no LLM call is made.
-- `summarize-transcript-failure` when every transcript strategy fails, the status shows `Error: All methods failed.` and `#debug-log` lists the timed `+Nms` M1 and M2 lines.
+- `summarize-transcript-failure` when the transcript panel yields nothing, the status shows `Error: No transcript found on the YouTube page.` and `#debug-log` lists the timed `+Nms Transcript panel: ...` lines.
 - `summarize-sponsorblock` filtered sponsor seconds appear in the result's sponsor card when SponsorBlock has segments.
 - `summarize-long` transcripts over the chunk limit report "Splitting into N chunks" in `#status`, then make N chunk calls plus one merge.
 - `summarize-cache` a second run on the same video within 6 hours logs `Transcript cache hit`.
@@ -39,7 +39,6 @@ Preconditions:
 - The transcript cache lives in `storage.session` for 6 hours. A second run on the same video skips YouTube. Use a fresh run to prove fetching.
 - SponsorBlock has a 350 ms deadline. A slow network silently yields `sponsorSaved: 0`, which is not a failure.
 - Observed 2026-11-08, Firefox 159, headless and headed, signed out:
-  - M1 `timedtext` returns HTTP 200 with an empty body.
-  - M2 finds `PAmodern_transcript_view`, but it stays a spinner.
+  - The transcript panel opens as `PAmodern_transcript_view`, but it stays a spinner.
 
-  In the user's real, signed-in Firefox the same build succeeds through M2 (331 segments in under a second), so this is an automation block, not an extension regression.
+  In the user's real, signed-in Firefox the same panel path returns the transcript (1033 segments 2 s after the click in a v4.5.5 log), so this is an automation block, not an extension regression.

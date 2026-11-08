@@ -89,7 +89,7 @@ async function getProcessedTranscript(tabId, videoId) {
 
   const debugLines = [...(Array.isArray(scriptResult.debugLines) ? scriptResult.debugLines : []), ...timingLines];
   if (scriptResult.status !== 'ok') {
-    const err = new Error(scriptResult.error || "All methods failed.");
+    const err = new Error(scriptResult.error || "No transcript found on the YouTube page.");
     err.debugLines = debugLines;
     throw err;
   }

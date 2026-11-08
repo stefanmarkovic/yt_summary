@@ -10,7 +10,7 @@
 <p>Firefox ekstenzija · Manifest V3</p><h1>Od YouTube transkripta do sažetka</h1>
 <p>YT Summary AI preuzima tekst videa, filtrira sponzorske segmente i šalje sadržaj izabranom AI servisu. Jezik interfejsa i jezik odgovora biraju se zasebno.</p>
 <section aria-labelledby="flow-title"><h2 id="flow-title">Tok podataka</h2><div class="flow">
-<div><strong>1. Transkript</strong><small>YouTube titlovi ili tekst sa stranice.</small></div>
+<div><strong>1. Transkript</strong><small>YouTube panel sa transkriptom.</small></div>
 <div><strong>2. Filtriranje</strong><small>SponsorBlock rasponi i vremenske oznake.</small></div>
 <div><strong>3. AI odgovor</strong><small>OpenRouter; dugi tekst deli se u delove.</small></div>
 <div><strong>4. Rezultat</strong><small>Sažetak, chat, kviz, promena detaljnosti i izvoz.</small></div>
@@ -22,7 +22,7 @@
 <li>Otvorite YouTube video, izaberite detaljnost, stil i jezik odgovora, pa pokrenite generisanje. Na stranici sa listom dostupna je i grupna obrada pronađenih videa.</li>
 </ol><p>Transkript mora da postoji. Ekstenzija ne transkribuje zvuk i ne garantuje dostupnost teksta za svaki video. Obrada liste obuhvata ID-jeve koje trenutno može da pronađe na stranici.</p></section>
 <section><h2>Dohvat i filtriranje</h2>
-<p>Na aktivnom videu samostalna funkcija radi u glavnom YouTube kontekstu (<code>world: "MAIN"</code>). Pokušaj preko titlova kreće odmah, a DOM pokušaj ima kratak odloženi početak. Prvi uspešan rezultat završava dohvat; preostali pokušaj se prekida. Grupna obrada otvara pozadinski YouTube prozor za svaki video.</p>
+<p>Na aktivnom videu samostalna funkcija radi u glavnom YouTube kontekstu (<code>world: "MAIN"</code>). Ona čita YouTube panel sa transkriptom: ako je već otvoren, odmah; inače klikne „Show transcript“ u opisu videa ili ⋯ meni ispod videa. Grupna obrada otvara pozadinski YouTube prozor za svaki video.</p>
 <p>SponsorBlock je dopunski izvor: nedostupan servis ne sprečava sažimanje. Tekst titla ne može precizno da se podeli po izgovorenim rečima jer nemamo njihove vremenske oznake. Pravilo za izbor segmenata i obračun vremena opisano je u tehničkoj dokumentaciji.</p></section>
 <section><h2>Podaci i troškovi</h2><ul>
 <li>API ključ i podešavanja čuvaju se u lokalnom skladištu ekstenzije. Ključ se šalje izabranom AI provajderu kao deo autentifikacije.</li>

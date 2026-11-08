@@ -132,7 +132,7 @@ describe('Popup UI interactions', () => {
   });
 
   test('the debug log shows where the time went and which model OpenRouter actually used', async () => {
-    global.getProcessedTranscript = jest.fn().mockResolvedValue({ text: 'Transcript A', debugLines: ['+40ms Transcript winner: M2', 'Page script: 900ms'], categoryStats: {}, chapters: [], segmentCount: 1, sponsorCount: 0, savedSeconds: 0 });
+    global.getProcessedTranscript = jest.fn().mockResolvedValue({ text: 'Transcript A', debugLines: ['+40ms Transcript panel: 120 segments', 'Page script: 900ms'], categoryStats: {}, chapters: [], segmentCount: 1, sponsorCount: 0, savedSeconds: 0 });
     global.PERSONA_PROMPTS = { standard: 'Standard' };
     global.resolvePersona = jest.fn(value => value);
     global.llmSummarizeLong = jest.fn().mockResolvedValue({
@@ -143,7 +143,7 @@ describe('Popup UI interactions', () => {
     document.getElementById('summarize-btn').click();
     await flush();
     const log = document.getElementById('debug-log').value;
-    expect(log).toContain('[PAGE] +40ms Transcript winner: M2');
+    expect(log).toContain('[PAGE] +40ms Transcript panel: 120 segments');
     expect(log).toContain('[LLM] summary: 13.9s, google/gemini-2.5-flash via Google, 10345 in / 1115 out tokens, 80 out tok/s');
     expect(log).toMatch(/\[TIMING\] transcript \d+\.\ds \| LLM \d+\.\ds \| total \d+\.\ds/);
     expect(log).toMatch(/=== Finished in \d+\.\ds/);
