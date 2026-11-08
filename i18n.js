@@ -2,6 +2,7 @@
 const I18N = {
   en: {
     "app_title": "YT Summary AI",
+    "model_custom": "Custom…",
     "api_model": "Model:",
     "api_key": "API Key:",
     "advanced_settings": "OpenRouter settings:",
@@ -95,6 +96,7 @@ const I18N = {
   },
   sr: {
     "app_title": "YT Summary AI",
+    "model_custom": "Drugi model…",
     "api_model": "Model:",
     "api_key": "API Ključ:",
     "advanced_settings": "OpenRouter podešavanja:",
@@ -188,6 +190,7 @@ const I18N = {
   },
   de: {
     "app_title": "YT Summary AI",
+    "model_custom": "Anderes Modell…",
     "api_model": "Modell:",
     "api_key": "API Schlüssel:",
     "advanced_settings": "OpenRouter-Einstellungen:",
@@ -281,6 +284,7 @@ const I18N = {
   },
   es: {
     "app_title": "YT Summary AI",
+    "model_custom": "Otro modelo…",
     "api_model": "Modelo:",
     "api_key": "Clave API:",
     "advanced_settings": "Configuración de OpenRouter:",

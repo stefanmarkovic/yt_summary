@@ -12,6 +12,10 @@ const DEFAULT_MODEL = 'openrouter/auto';
 // OpenRouter's default routing weights providers by price, which measured 2-3x slower than sorting by throughput.
 const PROVIDER_ROUTING = { fastest: { sort: 'throughput' }, balanced: null };
 const DEFAULT_ROUTING = 'fastest';
+// Every model offered in Settings takes at least 1M tokens, so 400k fits a multi-hour transcript in one call.
+const DEFAULT_CONTEXT_WINDOW = 400_000;
+// Releases before 4.5.3 saved this default into every config; treat it as unset so those configs get the new one.
+const LEGACY_DEFAULT_CONTEXT_WINDOW = 32768;
 
 function normalizeLlmConfig(rawConfig = {}) {
   if (!rawConfig || typeof rawConfig !== 'object') rawConfig = {};
@@ -20,13 +24,15 @@ function normalizeLlmConfig(rawConfig = {}) {
   // Configs saved before the OpenRouter-only release carry a Google (or older) key that OpenRouter rejects.
   const legacy = provider !== undefined && provider !== PROVIDER;
   const model = !legacy && typeof rest.model === 'string' && rest.model.trim() ? rest.model.trim() : DEFAULT_MODEL;
+  const contextWindow = Number(rest.contextWindow);
   return {
     ...rest,
     provider: PROVIDER,
     model,
     routing: Object.prototype.hasOwnProperty.call(PROVIDER_ROUTING, rest.routing) ? rest.routing : DEFAULT_ROUTING,
     apiKey: !legacy && typeof rest.apiKey === 'string' ? rest.apiKey.trim() : '',
-    contextWindow: Number.isInteger(Number(rest.contextWindow)) && Number(rest.contextWindow) > 0 ? Number(rest.contextWindow) : 32768,
+    contextWindow: Number.isInteger(contextWindow) && contextWindow > 0 && contextWindow !== LEGACY_DEFAULT_CONTEXT_WINDOW
+      ? contextWindow : DEFAULT_CONTEXT_WINDOW,
     temperature: rest.temperature != null && rest.temperature !== '' && Number.isFinite(Number(rest.temperature))
       ? Math.min(2, Math.max(0, Number(rest.temperature))) : 0.7,
     topP: rest.topP != null && rest.topP !== '' && Number.isFinite(Number(rest.topP))

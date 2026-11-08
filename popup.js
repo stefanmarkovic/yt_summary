@@ -7,6 +7,7 @@ async function initializePopup() {
   const setupView = document.getElementById('setup-view');
   const mainView = document.getElementById('main-view');
 
+  const modelPresetSelect = document.getElementById('model-preset-select');
   const apiModelInput = document.getElementById('api-model-input');
   const apiKeyInput = document.getElementById('api-key-input');
 
@@ -74,8 +75,16 @@ async function initializePopup() {
 
   // Initialize UI with config
   apiModelInput.value = config.model || DEFAULT_MODEL;
+  const isPreset = model => [...modelPresetSelect.options].some(option => option.value === model && option.value !== 'custom');
+  const showModelChoice = () => apiModelInput.classList.toggle('hidden', modelPresetSelect.value !== 'custom');
+  modelPresetSelect.value = isPreset(apiModelInput.value) ? apiModelInput.value : 'custom';
+  showModelChoice();
+  modelPresetSelect.addEventListener('change', () => {
+    if (modelPresetSelect.value !== 'custom') apiModelInput.value = modelPresetSelect.value;
+    showModelChoice();
+  });
   apiKeyInput.value = config.apiKey || '';
-  contextWindowInput.value = config.contextWindow || 32768;
+  contextWindowInput.value = config.contextWindow;
   temperatureInput.value = config.temperature ?? 0.7;
   topPInput.value = config.topP ?? 1.0;
   routingSelect.value = normalizeLlmConfig(config).routing;
@@ -166,7 +175,7 @@ async function initializePopup() {
       provider: 'openrouter',
       model: apiModelInput.value.trim(),
       apiKey: apiKeyInput.value.trim(),
-      contextWindow: parseInt(contextWindowInput.value) || 32768,
+      contextWindow: parseInt(contextWindowInput.value),
       temperature: Number.isFinite(parseFloat(temperatureInput.value)) ? parseFloat(temperatureInput.value) : 0.7,
       topP: Number.isFinite(parseFloat(topPInput.value)) ? parseFloat(topPInput.value) : 1.0,
       routing: routingSelect.value,

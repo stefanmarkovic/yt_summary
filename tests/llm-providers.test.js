@@ -32,7 +32,12 @@ describe('OpenRouter configuration', () => {
   });
 
   test.each([null, undefined, { contextWindow: -1 }, { contextWindow: Infinity }, { contextWindow: 'garbage' }])('normalizes invalid configuration %p without a negative chunk limit', input => {
-    expect(normalizeLlmConfig(input).contextWindow).toBe(32768);
+    expect(normalizeLlmConfig(input).contextWindow).toBe(400000);
+  });
+
+  test('configs saved with the old 32768 default move to the 400k default, explicit values stay', () => {
+    expect(normalizeLlmConfig({ contextWindow: 32768 }).contextWindow).toBe(400000);
+    expect(normalizeLlmConfig({ contextWindow: 120000 }).contextWindow).toBe(120000);
   });
 
   test('keeps explicit zero sampling values and clamps out of range settings', () => {

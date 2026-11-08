@@ -23,6 +23,13 @@
 
       <p id="migration-notice" class="hidden" data-i18n="gemini_removed" style="font-size: 12px; color: #f59e0b; margin: 0 0 10px;">Google Gemini is no longer supported. Enter an OpenRouter API key to continue.</p>
       <div style="margin-bottom: 5px;" data-i18n="api_model">Model:</div>
+      <select id="model-preset-select" style="width: 100%; box-sizing: border-box; padding: 5px; margin-bottom: 5px;">
+        <option value="openrouter/auto">Auto (OpenRouter)</option>
+        <option value="~openai/gpt-luna-latest">GPT Luna (latest)</option>
+        <option value="~openai/gpt-terra-latest">GPT Terra (latest)</option>
+        <option value="~anthropic/claude-haiku-latest">Claude Haiku (latest)</option>
+        <option value="custom" data-i18n="model_custom">Custom…</option>
+      </select>
       <input type="text" id="api-model-input" data-i18n="api_model_placeholder" placeholder="openrouter/auto">
       <div style="margin-bottom: 5px;" data-i18n="api_key">API Key:</div>
       <input type="password" id="api-key-input" data-i18n="api_key_placeholder" placeholder="Enter API key">
@@ -33,7 +40,7 @@
         <div style="display: flex; gap: 10px; margin-bottom: 8px;">
           <div style="flex: 1;">
             <div style="font-size: 11px; margin-bottom: 3px;" data-i18n="context_window">Context (tokens):</div>
-            <input type="number" id="context-window-input" min="1" step="1" placeholder="32768" style="width: 100%; box-sizing: border-box; padding: 5px;">
+            <input type="number" id="context-window-input" min="1" step="1" placeholder="400000" style="width: 100%; box-sizing: border-box; padding: 5px;">
           </div>
           <div style="flex: 1;">
             <div style="font-size: 11px; margin-bottom: 3px;" data-i18n="temperature">Temperature:</div>

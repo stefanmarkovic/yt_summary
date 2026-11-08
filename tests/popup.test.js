@@ -64,6 +64,19 @@ describe('Popup UI interactions', () => {
     expect(store.llm_config.topP).toBe(0);
   });
 
+  test('a custom model keeps its text field, and picking a preset saves that model with the 400k context', async () => {
+    const preset = document.getElementById('model-preset-select');
+    const modelInput = document.getElementById('api-model-input');
+    expect(preset.value).toBe('custom');
+    expect(modelInput.classList.contains('hidden')).toBe(false);
+    preset.value = '~anthropic/claude-haiku-latest';
+    preset.dispatchEvent(new Event('change'));
+    expect(modelInput.classList.contains('hidden')).toBe(true);
+    document.getElementById('save-key-btn').click();
+    await flush();
+    expect(store.llm_config).toMatchObject({ model: '~anthropic/claude-haiku-latest', contextWindow: 400000 });
+  });
+
   test('provider routing defaults to fastest and saves the cheaper choice', async () => {
     const routing = document.getElementById('routing-select');
     expect(routing.value).toBe('fastest');
