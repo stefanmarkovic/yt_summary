@@ -112,7 +112,7 @@ node $Y stop          # prints {stopped, firefoxGone, profileRemoved, evidence}
 
 ## Known blockers (Nov 2026)
 
-- **YouTube serves no transcript to the anonymous automated profile.** In both headless and headed runs all three fetcher strategies fail:
+- **YouTube serves no transcript to an automated Firefox, signed in or not.** A run seeded with the user's signed-in YouTube cookies (`ytcfg LOGGED_IN` true, Premium) failed the same way. There the video played, and YouTube's own player requested `timedtext` with a `pot` token and `fmt=json3`, yet it got HTTP 200 with an empty body and showed no captions on screen. The block is on the automated browser, not on the extension or the login, so do not retry with cookies. In both headless and headed runs all three fetcher strategies fail:
   - M1: `timedtext` returns HTTP 200 with an empty body.
   - M2: `get_transcript` returns HTTP 400 "Precondition check failed".
   - M3: the DOM scrape finds the new `PAmodern_transcript_view` panel, which never leaves its spinner. YouTube's own "Show transcript" panel spins forever in this profile too.
