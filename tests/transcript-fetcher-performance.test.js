@@ -31,6 +31,24 @@ describe('transcript fast-path selection', () => {
     expect(jest.getTimerCount()).toBe(0);
   });
 
+  test('empty captions start DOM scraping at once, and the description button is clicked without a fixed pause', async () => {
+    const expand = document.createElement('tp-yt-paper-button');
+    expand.id = 'expand';
+    Object.defineProperty(expand, 'offsetParent', { get: () => document.body });
+    document.body.prepend(expand);
+    const expandClick = jest.spyOn(expand, 'click');
+    const transcriptClick = jest.spyOn(document.querySelector('button'), 'click');
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true, status: 200, headers: { get: () => 'text/html' }, text: async () => ''
+    });
+    const pending = fetchTranscriptInPageContext('video');
+    await jest.advanceTimersByTimeAsync(10);
+    expect(expandClick).toHaveBeenCalled();
+    expect(transcriptClick).toHaveBeenCalled();
+    await jest.advanceTimersByTimeAsync(8000);
+    await pending;
+  });
+
   test('every page debug line carries its elapsed time for speed analysis', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true, status: 200, headers: { get: () => 'text/xml' }, text: async () => ''

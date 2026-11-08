@@ -57,10 +57,8 @@ async function cacheTranscript(videoId, result) {
 async function getProcessedTranscript(tabId, videoId) {
   const cached = await getCachedTranscript(videoId);
   if (cached) {
-    return {
-      ...cached,
-      debugLines: [...(cached.debugLines || []), 'Transcript cache hit']
-    };
+    // The cached fetch's page lines would read as this run's timings, so only the hit is logged.
+    return { ...cached, debugLines: ['Transcript cache hit: no page script or SponsorBlock request this run'] };
   }
 
   // 1. SponsorBlock — paralelno sa transkriptom

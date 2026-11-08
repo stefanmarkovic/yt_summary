@@ -8,7 +8,7 @@ Below the summary, the user can ask questions about the video. Each question is 
 - `chat-history` a follow-up question sends the earlier turns as history.
 - `chat-error` an LLM failure renders `Greška: <message>` as a model message.
 - `quiz-generate` `#generate-quiz-btn` renders a `.quiz-container` with radio options and a `.quiz-submit` button.
-- `quiz-score` checking answers colors right and wrong options, disables the inputs and shows `Score: n/N`.
+- `quiz-score` checking answers tags the chosen option (`✓/✗ your answer`) and the correct one (`✓ correct answer`), notes unanswered questions, disables the inputs and replaces the button with a `.quiz-score` line `Score: n/N`.
 - `quiz-invalid` malformed quiz JSON renders the quiz error message instead of a quiz.
 
 ## How to get to it (user POV)
@@ -25,7 +25,7 @@ Preconditions:
 - **Ask.** Run `node $Y type result.html '#chat-input' 'What is the video about?'` and `node $Y click result.html '#chat-send-btn'`. Then run `node $Y wait result.html "document.querySelectorAll('#chat-messages .message-model').length >= 1"`. `.message-user` shows the question, and `.message-model` shows `[ytv-stub] answer to: What is the video about?`.
 - **Follow-up.** Ask a second question the same way. `llm-log` shows two `chat` tasks. The stub does not echo history, so assert two model messages, in order.
 - **Quiz.** Run `node $Y click result.html '#generate-quiz-btn'` and `node $Y wait result.html "document.querySelector('.quiz-container .quiz-submit')"`. There are 2 `.quiz-question` blocks, and `llm-log` shows a `quiz` task.
-- **Score.** Run `node $Y eval result.html "(() => { const qs = document.querySelectorAll('.quiz-question'); qs[0].querySelectorAll('input')[0].click(); qs[1].querySelectorAll('input')[0].click(); document.querySelector('.quiz-submit').click(); return document.querySelector('.quiz-submit').textContent; })()"`. It returns `Score: 1/2`, and every input is disabled.
+- **Score.** Run `node $Y eval result.html "(() => { const qs = document.querySelectorAll('.quiz-question'); qs[0].querySelectorAll('input')[0].click(); qs[1].querySelectorAll('input')[0].click(); document.querySelector('.quiz-submit').click(); return document.querySelector('.quiz-score').textContent + ' / ' + [...document.querySelectorAll('.quiz-tag')].map(t => t.textContent).join(', '); })()"`. It returns `Score: 1/2` with one `your answer` tag per question and a `correct answer` tag on the missed question, and every input is disabled.
 - **Proof.** Run `node $Y shot result.html chat-quiz`.
 
 ## Gotchas
