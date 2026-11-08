@@ -1,6 +1,6 @@
 # YT Summary AI
 
-Firefox ekstenzija (Manifest V3, verzija 4.5.0) za sažimanje YouTube videa pomoću OpenRouter servisa. Jezik interfejsa i jezik AI odgovora biraju se nezavisno.
+Firefox ekstenzija (Manifest V3, verzija 4.5.1) za sažimanje YouTube videa pomoću OpenRouter servisa. Jezik interfejsa i jezik AI odgovora biraju se nezavisno.
 
 ## Šta podržava
 
