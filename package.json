@@ -1,6 +1,6 @@
 {
   "name": "yt-summary-ai",
-  "version": "4.5.7",
+  "version": "4.5.8",
   "description": "AI sažetak YouTube videa",
   "scripts": {
     "package": "npm run package:ps",

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YT Summary AI",
-  "version": "4.5.7",
+  "version": "4.5.8",
   "description": "AI sažetak YouTube videa.",
   "permissions": [
     "activeTab",
@@ -28,7 +28,8 @@
       "id": "yt-summary-ai@stefan.local",
       "data_collection_permissions": {
         "required": [
-          "none"
+          "websiteContent",
+          "browsingActivity"
         ]
       }
     }
