@@ -32,7 +32,12 @@ describe('OpenRouter configuration', () => {
   });
 
   test.each([null, undefined, { contextWindow: -1 }, { contextWindow: Infinity }, { contextWindow: 'garbage' }])('normalizes invalid configuration %p without a negative chunk limit', input => {
-    expect(normalizeLlmConfig(input).contextWindow).toBe(32768);
+    expect(normalizeLlmConfig(input).contextWindow).toBe(400000);
+  });
+
+  test('configs saved with the old 32768 default move to the 400k default, explicit values stay', () => {
+    expect(normalizeLlmConfig({ contextWindow: 32768 }).contextWindow).toBe(400000);
+    expect(normalizeLlmConfig({ contextWindow: 120000 }).contextWindow).toBe(120000);
   });
 
   test('keeps explicit zero sampling values and clamps out of range settings', () => {
@@ -64,12 +69,19 @@ describe('OpenRouter transport', () => {
       model: 'openrouter/auto',
       temperature: 0.4,
       top_p: 0.9,
+      provider: { sort: 'throughput' },
       messages: [
         { role: 'system', content: 'system' },
         { role: 'assistant', content: 'previous answer' },
         { role: 'user', content: 'new question' }
       ]
     });
+  });
+
+  test('balanced routing leaves provider choice to OpenRouter, and unknown values fall back to fastest', () => {
+    const balanced = buildOpenRouterRequest(normalizeLlmConfig({ ...config, routing: 'balanced' }), 'system', 'q', []);
+    expect(JSON.parse(balanced.body).provider).toBeUndefined();
+    expect(normalizeLlmConfig({ routing: 'nitro' }).routing).toBe('fastest');
   });
 
   test('parses text, token usage and the cost OpenRouter reports', () => {

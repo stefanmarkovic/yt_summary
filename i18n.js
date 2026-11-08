@@ -2,6 +2,7 @@
 const I18N = {
   en: {
     "app_title": "YT Summary AI",
+    "model_custom": "Custom…",
     "api_model": "Model:",
     "api_key": "API Key:",
     "advanced_settings": "OpenRouter settings:",
@@ -88,10 +89,14 @@ const I18N = {
     "custom_prefix": "Custom",
     "context_window": "Context window:",
     "temperature": "Temperature:",
-    "top_p": "Top P:"
+    "top_p": "Top P:",
+    "routing": "Provider:",
+    "routing_fastest": "Fastest",
+    "routing_balanced": "Cheaper"
   },
   sr: {
     "app_title": "YT Summary AI",
+    "model_custom": "Drugi model…",
     "api_model": "Model:",
     "api_key": "API Ključ:",
     "advanced_settings": "OpenRouter podešavanja:",
@@ -178,10 +183,14 @@ const I18N = {
     "custom_prefix": "Prilagođeno",
     "context_window": "Kontekstni prozor:",
     "temperature": "Temperatura:",
-    "top_p": "Top P:"
+    "top_p": "Top P:",
+    "routing": "Provajder:",
+    "routing_fastest": "Najbrži",
+    "routing_balanced": "Jeftiniji"
   },
   de: {
     "app_title": "YT Summary AI",
+    "model_custom": "Anderes Modell…",
     "api_model": "Modell:",
     "api_key": "API Schlüssel:",
     "advanced_settings": "OpenRouter-Einstellungen:",
@@ -268,10 +277,14 @@ const I18N = {
     "custom_prefix": "Benutzerdefiniert",
     "context_window": "Kontextfenster:",
     "temperature": "Temperatur:",
-    "top_p": "Top P:"
+    "top_p": "Top P:",
+    "routing": "Anbieter:",
+    "routing_fastest": "Am schnellsten",
+    "routing_balanced": "Günstiger"
   },
   es: {
     "app_title": "YT Summary AI",
+    "model_custom": "Otro modelo…",
     "api_model": "Modelo:",
     "api_key": "Clave API:",
     "advanced_settings": "Configuración de OpenRouter:",
@@ -358,7 +371,10 @@ const I18N = {
     "custom_prefix": "Personalizado",
     "context_window": "Ventana de contexto:",
     "temperature": "Temperatura:",
-    "top_p": "Top P:"
+    "top_p": "Top P:",
+    "routing": "Proveedor:",
+    "routing_fastest": "El más rápido",
+    "routing_balanced": "Más barato"
   }
 };
 
