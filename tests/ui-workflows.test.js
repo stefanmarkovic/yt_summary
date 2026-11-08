@@ -46,9 +46,30 @@ test('multiple quizzes keep independent radio groups and render model text liter
   expect(first.name).not.toBe(second.name);
   expect(messages.querySelector('img,svg')).toBeNull();
   quizzes[0].querySelector('.quiz-submit').click();
-  expect(quizzes[0].querySelector('.quiz-submit').textContent).toBe('Score: 1/1');
+  expect(quizzes[0].querySelector('.quiz-score').textContent).toBe('Score: 1/1');
   expect(first.disabled).toBe(true);
   expect(button.textContent).toBe('Generate Quiz');
+});
+
+test('checked quiz tells the chosen option apart from the correct answer and shows the score', async () => {
+  global.llmQuiz = jest.fn().mockResolvedValue({ text: JSON.stringify([
+    { question: 'Q1', options: ['A', 'B', 'C'], answerIndex: 0 },
+    { question: 'Q2', options: ['A', 'B', 'C'], answerIndex: 2 },
+    { question: 'Q3', options: ['A', 'B'], answerIndex: 1 }
+  ]) });
+  await handleGenerateQuiz({ uiLanguage: 'sr' }, 'Transcript', document.getElementById('messages'), document.getElementById('quiz'));
+  const quiz = document.querySelector('.quiz-container');
+  const [q1, q2, q3] = quiz.querySelectorAll('.quiz-question');
+  q1.querySelectorAll('input')[0].click();
+  q2.querySelectorAll('input')[1].click();
+  quiz.querySelector('.quiz-submit').click();
+  const tags = question => [...question.querySelectorAll('label')].map(label => label.querySelector('.quiz-tag')?.textContent || '');
+  expect(tags(q1)).toEqual(['✓ tvoj odgovor', '', '']);
+  expect(tags(q2)).toEqual(['', '✗ tvoj odgovor', '✓ tačan odgovor']);
+  expect(tags(q3)).toEqual(['', '✓ tačan odgovor']);
+  expect(q3.querySelector('.quiz-unanswered').textContent).toBe('Nisi izabrao odgovor');
+  expect(quiz.querySelector('.quiz-score').textContent).toBe('Rezultat: 1/3');
+  expect(quiz.querySelector('.quiz-submit')).toBeNull();
 });
 
 test('invalid quiz schema produces a message and restores its button', async () => {
