@@ -9,7 +9,7 @@ async function handleGenerateQuiz(config, transcript, messagesEl, buttonEl) {
   buttonEl.disabled = true;
   buttonEl.textContent = localize('quiz_generating');
   try {
-    const result = await llmQuiz(config, transcript);
+    const result = await llmQuiz(config, transcript, config.outputLanguage || 'English');
     const questions = JSON.parse(result.text);
     if (!Array.isArray(questions) || questions.length === 0 || questions.some(q =>
       !q || typeof q.question !== 'string' || !Array.isArray(q.options) || q.options.length < 2 ||

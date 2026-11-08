@@ -26,7 +26,7 @@ function initChat(config, transcript, messagesEl, inputEl, sendBtnEl) {
     appendMessage('user', text);
 
     try {
-      const result = await llmChat(config, transcript, chatHistory, text);
+      const result = await llmChat(config, transcript, chatHistory, text, config.outputLanguage || 'English');
       appendMessage('model', result.text);
       chatHistory.push({ role: "user", parts: [{ text: text }] });
       chatHistory.push({ role: "model", parts: [{ text: result.text }] });

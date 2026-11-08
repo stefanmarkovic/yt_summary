@@ -219,7 +219,7 @@ async function initializePlaylist() {
           // Dohvati najsvežiji naslov taba nakon učitavanja
           const tabDetails = await browser.tabs.get(tabId);
           if (tabDetails.title) {
-            videoTitle = tabDetails.title.replace(' - YouTube', '');
+            videoTitle = tabDetails.title.replace(/^\(\d+\+?\)\s*/, '').replace(/ - YouTube$/, '');
           }
           
           for (const line of processed.debugLines) {

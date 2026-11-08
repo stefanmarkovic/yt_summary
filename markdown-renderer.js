@@ -24,16 +24,18 @@ function markdownToHtml(md) {
   html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
   html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
   html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-  html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
-  html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n');
   html = html.replace(/^---$/gm, '<hr>');
+  // List markers are consumed before emphasis so a bullet `*` never pairs with an italic `*`.
+  // Indented (nested) items are flattened into the surrounding list instead of leaking as raw text.
   // Ordered list items use a temporary <OLI> tag to disambiguate from unordered <li>
   // during regex processing, then get converted to real <li> inside <ol> below.
-  html = html.replace(/^\d+\. (.+)$/gm, '<OLI>$1</OLI>');
-  html = html.replace(/^[-*] (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/^[ \t]*\d+\. (.+)$/gm, '<OLI>$1</OLI>');
+  html = html.replace(/^[ \t]*[-*+] (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*(?!\s)(.+?)(?<!\s)\*/g, '<em>$1</em>');
+  html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+  html = html.replace(/<\/blockquote>\n<blockquote>/g, '\n');
   html = html.replace(/((<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
   html = html.replace(/((<OLI>.*<\/OLI>\n?)+)/g, (match) =>
     '<ol>' + match.replace(/<(\/?)OLI>/g, '<$1li>') + '</ol>');

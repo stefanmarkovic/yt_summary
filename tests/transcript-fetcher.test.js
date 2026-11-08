@@ -33,6 +33,13 @@ describe('injected transcript fetcher', () => {
     expect(jest.getTimerCount()).toBe(0);
   });
 
+  test('decodes double-escaped entities in legacy timedtext captions', async () => {
+    captionResponse('<transcript><text start="0" dur="1">I&amp;#39;m here &amp;amp; ready</text></transcript>');
+    await expect(fetchTranscriptInPageContext('video')).resolves.toMatchObject({
+      status: 'ok', segments: [{ text: "I'm here & ready" }]
+    });
+  });
+
   test('parses timed-text XML and captions shorter than the former 50 byte cutoff', async () => {
     captionResponse('<timedtext><body><p t="1500" d="2000"><s>Hello</s> world</p></body></timedtext>');
     await expect(fetchTranscriptInPageContext('video')).resolves.toMatchObject({
