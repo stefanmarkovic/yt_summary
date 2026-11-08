@@ -39,7 +39,11 @@ async function fetchTranscriptInPageContext(videoId) {
       const scale = node.tagName === 'p' ? 1000 : 1;
       const startSec = Number(node.getAttribute(scale === 1000 ? 't' : 'start') || 0) / scale;
       const durSec = Math.max(0, Number(node.getAttribute(scale === 1000 ? 'd' : 'dur') || 0) / scale);
-      const caption = (node.textContent || '').trim();
+      let caption = (node.textContent || '').trim();
+      // Legacy timedtext double-escapes entities (`&amp;#39;`), so one XML pass leaves `&#39;`.
+      if (caption.includes('&')) {
+        caption = new DOMParser().parseFromString(caption, 'text/html').documentElement.textContent.trim();
+      }
       if (caption && Number.isFinite(startSec) && startSec >= 0 && Number.isFinite(durSec)) {
         segments.push({ text: caption, startSec, durSec });
       }

@@ -77,3 +77,17 @@ test('playlist network timeout aborts response consumption and clears timers', a
   expect(jest.getTimerCount()).toBe(0);
   jest.useRealTimers();
 });
+
+test('chat and quiz answer in the configured output language', async () => {
+  global.llmChat = jest.fn().mockResolvedValue({ text: 'Odgovor' });
+  global.llmQuiz = jest.fn().mockResolvedValue({ text: JSON.stringify([{ question: 'Q', options: ['A', 'B'], answerIndex: 0 }]) });
+  const config = { uiLanguage: 'sr', outputLanguage: 'Srpski' };
+  const input = document.getElementById('input');
+  initChat(config, 'Transcript', document.getElementById('messages'), input, document.getElementById('send'));
+  input.value = 'Zašto?';
+  document.getElementById('send').click();
+  await flush();
+  await handleGenerateQuiz(config, 'Transcript', document.getElementById('messages'), document.getElementById('quiz'));
+  expect(llmChat.mock.calls[0][4]).toBe('Srpski');
+  expect(llmQuiz.mock.calls[0][2]).toBe('Srpski');
+});

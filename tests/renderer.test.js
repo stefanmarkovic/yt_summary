@@ -32,3 +32,24 @@ describe('Markdown renderer', () => {
     expect(container.textContent).toBe('TextLink');
   });
 });
+
+describe('Markdown lists as LLMs emit them', () => {
+  test('italic text inside an asterisk bullet keeps both the list and the emphasis', () => {
+    const container = document.createElement('div');
+    setSafeHTML(container, markdownToHtml('* item with *emphasis* here\n* second'));
+    expect([...container.querySelectorAll('ul > li')].map(li => li.textContent)).toEqual(['item with emphasis here', 'second']);
+    expect(container.querySelector('li em').textContent).toBe('emphasis');
+    expect(container.querySelector('p ul')).toBeNull();
+  });
+
+  test('indented sub-bullets render as list items instead of raw asterisks', () => {
+    const container = document.createElement('div');
+    setSafeHTML(container, markdownToHtml('* **Topic:**\n    * detail one\n    * detail two\n* next'));
+    expect([...container.querySelectorAll('li')].map(li => li.textContent)).toEqual(['Topic:', 'detail one', 'detail two', 'next']);
+    expect(container.textContent).not.toContain('*');
+  });
+
+  test('a lone asterisk between spaces stays literal', () => {
+    expect(markdownToHtml('2 * 3 * 4')).toBe('<p>2 * 3 * 4</p>');
+  });
+});

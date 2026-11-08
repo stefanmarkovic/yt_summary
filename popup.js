@@ -406,7 +406,7 @@ async function initializePopup() {
       log(`Response: ${result.text.length} chars | Tokens: ${result.usage.promptTokens} in + ${result.usage.outputTokens} out = ${result.usage.totalTokens} total`);
       log(`Cost: ~$${result.usage.estimatedCost}`);
 
-      const videoTitle = tab.title?.replace(' - YouTube', '') || 'Video sažetak';
+      const videoTitle = tab.title?.replace(/^\(\d+\+?\)\s*/, '').replace(/ - YouTube$/, '') || 'Video sažetak';
 
       const resultId = crypto.randomUUID();
       const finalResult = {
