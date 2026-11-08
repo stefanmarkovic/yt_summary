@@ -209,17 +209,17 @@ async function fetchTranscriptInPageContext(videoId) {
       );
       for (const btn of expandBtns) {
         if (controller.signal.aborted) return null;
-        if (btn.offsetParent !== null) { 
-          btn.click(); 
-          await new Promise(r => setTimeout(r, 300)); 
-          break; 
+        if (btn.offsetParent !== null) {
+          btn.click();
+          break;
         }
       }
       if (controller.signal.aborted) return null;
-      const descTranscriptBtn = document.querySelector(
+      const descTranscriptBtn = await waitForEl(
         'ytd-video-description-transcript-section-renderer button, ' +
         'ytd-video-description-transcript-section-renderer ytd-button-renderer, ' +
-        'ytd-video-description-transcript-section-renderer #button'
+        'ytd-video-description-transcript-section-renderer #button',
+        300
       );
       if (descTranscriptBtn) {
         descriptionBtnFound = true;
@@ -359,10 +359,13 @@ async function fetchTranscriptInPageContext(videoId) {
 
     // Captions and DOM scraping race; the loser is aborted so it stops using the network and the page.
     // InnerTube /get_transcript was removed: since late 2026 it answers 400 "Precondition check failed".
-    const domAttempt = new Promise(resolve => { domTimer = setTimeout(resolve, 150); }).then(() => (
-      controller.signal.aborted ? null : tryDomScraping()
-    ));
-    const attempts = [tryBaseUrl(controller.signal), domAttempt];
+    // DOM scraping clicks the page, so it waits 150ms for captions, or less once captions come back empty.
+    const captionAttempt = tryBaseUrl(controller.signal);
+    const domAttempt = new Promise(resolve => {
+      domTimer = setTimeout(resolve, 150);
+      captionAttempt.then(segments => { if (!segments?.length) resolve(); }, resolve);
+    }).then(() => (controller.signal.aborted ? null : tryDomScraping()));
+    const attempts = [captionAttempt, domAttempt];
     const successfulAttempts = attempts.map((attempt, index) => attempt.then(segments => {
       if (segments && segments.length > 0) return { index, segments };
       if (!controller.signal.aborted) dbg(`M${index + 1}: finished without segments`);
