@@ -51,7 +51,7 @@ function updateSummaryUI(result) {
   const lang = currentConfig?.uiLanguage || 'en';
   document.getElementById('video-title').textContent = result.title || getLocalizedString('result_title', lang);
   document.title = `${getLocalizedString('result_title', lang)}: ${result.title || 'Video'}`;
-  document.getElementById('meta-date').textContent = new Date(result.timestamp).toLocaleDateString(lang, { day: 'numeric', month: 'long', year: 'numeric' });
+  document.getElementById('meta-date').textContent = new Date(result.timestamp).toLocaleDateString(lang === 'sr' ? 'sr-Latn' : lang, { day: 'numeric', month: 'long', year: 'numeric' });
 
   // Delegate rendering to summary-renderer.js
   const summaryContainer = document.getElementById('summary');

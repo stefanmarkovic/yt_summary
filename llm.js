@@ -1,157 +1,98 @@
-// LLM transport module (Google Gemini and OpenRouter only)
+// LLM transport module (OpenRouter)
 // Prompt construction lives in prompts.js (loaded before this file)
-/* exported llmSummarizeLong, llmExtractEntities, llmQuiz, llmChat */
+/* exported llmSummarizeLong, llmExtractEntities, llmQuiz, llmChat, OPENROUTER_URL, DEFAULT_MODEL */
 
 const LLM_TIMEOUT_MS = 180_000;
 const promptBuilders = typeof module !== 'undefined' && module.exports ? require('./prompts.js') : null;
 const SUMMARY_DETAILS = promptBuilders ? promptBuilders.DETAIL_PROMPTS : DETAIL_PROMPTS;
 
-const GEMINI_MODELS = Object.freeze([
-  "gemini-3.7-flash",
-  "gemini-3.5-flash-lite"
-]);
-
-const LLM_PROVIDERS = Object.freeze({
-  gemini: Object.freeze({
-    url: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-    defaultModel: GEMINI_MODELS[0]
-  }),
-  openrouter: Object.freeze({
-    url: "https://openrouter.ai/api/v1/chat/completions",
-    defaultModel: "openrouter/auto"
-  })
-});
-
-// per 1M tokens
-const PRICING = {
-  // Gemini 3.7 Flash introductory pricing through 2026-12-31.
-  gemini: { input: 0.75, output: 3.75 },
-  "gemini-lite": { input: 0.30, output: 2.50 }
-};
+const PROVIDER = 'openrouter';
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const DEFAULT_MODEL = 'openrouter/auto';
 
 function normalizeLlmConfig(rawConfig = {}) {
   if (!rawConfig || typeof rawConfig !== 'object') rawConfig = {};
-  const legacyLite = rawConfig.provider === 'gemini-lite';
-  const supportedProvider = legacyLite || Object.prototype.hasOwnProperty.call(LLM_PROVIDERS, rawConfig.provider);
-  const provider = legacyLite ? 'gemini' : (supportedProvider ? rawConfig.provider : 'gemini');
-  const preset = LLM_PROVIDERS[provider];
-
-  let model;
-  if (provider === 'gemini') {
-    const modelMigrations = {
-      'gemini-3-flash-preview': GEMINI_MODELS[0],
-      'gemini-3.1-flash-lite': GEMINI_MODELS[1]
-    };
-    const requestedModel = legacyLite
-      ? GEMINI_MODELS[1]
-      : (modelMigrations[rawConfig.model] || rawConfig.model);
-    model = GEMINI_MODELS.includes(requestedModel) ? requestedModel : preset.defaultModel;
-  } else {
-    model = typeof rawConfig.model === 'string' && rawConfig.model.trim()
-      ? rawConfig.model.trim()
-      : preset.defaultModel;
-  }
-
+  // eslint-disable-next-line no-unused-vars
+  const { url, provider, ...rest } = rawConfig;
+  // Configs saved before the OpenRouter-only release carry a Google (or older) key that OpenRouter rejects.
+  const legacy = provider !== undefined && provider !== PROVIDER;
+  const model = !legacy && typeof rest.model === 'string' && rest.model.trim() ? rest.model.trim() : DEFAULT_MODEL;
   return {
-    ...rawConfig,
-    provider,
-    url: preset.url,
+    ...rest,
+    provider: PROVIDER,
     model,
-    apiKey: supportedProvider && typeof rawConfig.apiKey === 'string' ? rawConfig.apiKey.trim() : '',
-    contextWindow: Number.isInteger(Number(rawConfig.contextWindow)) && Number(rawConfig.contextWindow) > 0 ? Number(rawConfig.contextWindow) : 32768,
-    temperature: rawConfig.temperature != null && rawConfig.temperature !== '' && Number.isFinite(Number(rawConfig.temperature))
-      ? Math.min(2, Math.max(0, Number(rawConfig.temperature))) : 0.7,
-    topP: rawConfig.topP != null && rawConfig.topP !== '' && Number.isFinite(Number(rawConfig.topP))
-      ? Math.min(1, Math.max(0, Number(rawConfig.topP))) : 1
+    apiKey: !legacy && typeof rest.apiKey === 'string' ? rest.apiKey.trim() : '',
+    contextWindow: Number.isInteger(Number(rest.contextWindow)) && Number(rest.contextWindow) > 0 ? Number(rest.contextWindow) : 32768,
+    temperature: rest.temperature != null && rest.temperature !== '' && Number.isFinite(Number(rest.temperature))
+      ? Math.min(2, Math.max(0, Number(rest.temperature))) : 0.7,
+    topP: rest.topP != null && rest.topP !== '' && Number.isFinite(Number(rest.topP))
+      ? Math.min(1, Math.max(0, Number(rest.topP))) : 1
   };
 }
 
 function assertSupportedConfig(config) {
-  if (!config || !Object.prototype.hasOwnProperty.call(LLM_PROVIDERS, config.provider)) {
-    throw new Error("Nepodržan LLM provajder. Dozvoljeni su samo Google Gemini i OpenRouter.");
-  }
-  const preset = LLM_PROVIDERS[config.provider];
-  if (config.url !== preset.url) {
-    throw new Error(`Nedozvoljen API URL za provajdera '${config.provider}'.`);
+  if (!config || config.provider !== PROVIDER) {
+    throw new Error('Unsupported LLM configuration. Open Settings and save an OpenRouter API key.');
   }
   if (typeof config.apiKey !== 'string' || !config.apiKey.trim()) {
-    throw new Error("API ključ je obavezan.");
+    throw new Error('An OpenRouter API key is required.');
   }
-  if (config.provider === 'gemini' && !GEMINI_MODELS.includes(config.model)) {
-    throw new Error("Nepodržan Google Gemini model.");
+  if (typeof config.model !== 'string' || !config.model.trim()) {
+    throw new Error('An OpenRouter model is required.');
   }
-  if (config.provider === 'openrouter' && (!config.model || !String(config.model).trim())) {
-    throw new Error("OpenRouter model je obavezan.");
-  }
-}
-
-// === Interni provider seam-ovi ===
-
-function buildGeminiRequest(config, systemInstruction, userMessage, history) {
-  const url = config.url.replace('{model}', config.model);
-  const contents = [...history, { role: "user", parts: [{ text: userMessage }] }];
-  
-  const body = {
-    contents,
-    systemInstruction: { parts: [{ text: systemInstruction }] },
-    generationConfig: { temperature: config.temperature ?? 0.7, topP: config.topP ?? 1 }
-  };
-  
-  const headers = { 'Content-Type': 'application/json', 'x-goog-api-key': config.apiKey };
-  return { url, headers, body: JSON.stringify(body) };
 }
 
 function buildOpenRouterRequest(config, systemInstruction, userMessage, history) {
-  const url = config.url;
-  const messages = [{ role: "system", content: systemInstruction }];
+  const messages = [{ role: 'system', content: systemInstruction }];
   for (const h of history) {
-    messages.push({ role: h.role === "user" ? "user" : "assistant", content: h.parts.map(part => part.text || '').join('') });
+    messages.push({ role: h.role === 'user' ? 'user' : 'assistant', content: h.parts.map(part => part.text || '').join('') });
   }
-  messages.push({ role: "user", content: userMessage });
-  const headers = { 'Content-Type': 'application/json' };
-  headers['Authorization'] = `Bearer ${config.apiKey}`;
-  headers['X-OpenRouter-Title'] = 'YT Summary AI';
-  
-  const body = { 
-    model: config.model, 
+  messages.push({ role: 'user', content: userMessage });
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${config.apiKey}`,
+    'X-OpenRouter-Title': 'YT Summary AI'
+  };
+  const body = {
+    model: config.model,
     messages,
     temperature: config.temperature ?? 0.7,
     top_p: config.topP ?? 1.0
   };
-  
-  return { url, headers, body: JSON.stringify(body) };
+  return { url: OPENROUTER_URL, headers, body: JSON.stringify(body) };
 }
 
-function parseGeminiResponse(result, config) {
-  if (result?.error) throw new Error(result.error.message || 'Google Gemini API greška.');
-  const candidate = result?.candidates?.[0];
-  const text = (candidate?.content?.parts || [])
-    .filter(part => !part.thought && typeof part.text === 'string').map(part => part.text).join('');
-  if (!text.trim()) {
-    const reason = result?.promptFeedback?.blockReason || candidate?.finishReason;
-    throw new Error(`API nije vratio tekst odgovora.${reason ? ` Razlog: ${reason}.` : ''}`);
+function buildUsage(promptTokens, outputTokens, cost) {
+  promptTokens = Number.isFinite(promptTokens) && promptTokens >= 0 ? promptTokens : 0;
+  outputTokens = Number.isFinite(outputTokens) && outputTokens >= 0 ? outputTokens : 0;
+  const estimatedCost = (Number.isFinite(cost) && cost >= 0 ? cost : 0).toFixed(6);
+  return { promptTokens, outputTokens, totalTokens: promptTokens + outputTokens, estimatedCost };
+}
+
+function parseOpenRouterResponse(result) {
+  if (result?.error) throw new Error(`OpenRouter: ${result.error.message || 'API error.'}`);
+  const choice = result?.choices?.[0];
+  const text = choice?.message?.content;
+  if (typeof text !== 'string' || !text.trim()) {
+    const reason = choice?.finish_reason || choice?.native_finish_reason;
+    throw new Error(`API did not return a text response.${reason ? ` Reason: ${reason}.` : ''}`);
   }
-  const meta = result.usageMetadata || {};
-  const outputTokens = (Number.isFinite(meta.candidatesTokenCount) ? meta.candidatesTokenCount : 0)
-    + (Number.isFinite(meta.thoughtsTokenCount) ? meta.thoughtsTokenCount : 0);
-  const usage = calculateUsage(config.provider, config.model, meta.promptTokenCount, outputTokens);
-  return { text, usage };
-}
-
-function parseOpenRouterResponse(result, config) {
-  if (result?.error) throw new Error(result.error.message || "OpenRouter API greška.");
-  const text = result?.choices?.[0]?.message?.content;
-  if (typeof text !== 'string' || !text.trim()) throw new Error("API did not return a text response.");
   const meta = result.usage || {};
-  const usage = calculateUsage(config.provider, config.model, meta.prompt_tokens, meta.completion_tokens);
-  if (Number.isFinite(meta.cost) && meta.cost >= 0) usage.estimatedCost = meta.cost.toFixed(6);
-  return { text, usage };
+  return { text, usage: buildUsage(meta.prompt_tokens, meta.completion_tokens, meta.cost) };
 }
 
-function handleHttpError(response, provider) {
-  if (response.status === 429) {
-    throw new Error(`API Quota Exceeded (HTTP 429). Vaš limit za upite kod provajdera '${provider}' je potrošen. Pokušajte kasnije.`);
-  }
+const HTTP_ERRORS = {
+  401: 'OpenRouter rejected the API key (HTTP 401). Use an API key from openrouter.ai/keys, not a management key.',
+  402: 'OpenRouter credits are exhausted or the key limit is reached (HTTP 402).',
+  429: 'API quota exceeded (HTTP 429). OpenRouter is rate limiting this key. Try again later.'
+};
+
+async function httpError(response) {
+  if (HTTP_ERRORS[response.status]) return new Error(HTTP_ERRORS[response.status]);
+  const errText = await response.text().catch(() => '');
+  let detail = errText.substring(0, 200);
+  try { detail = JSON.parse(errText).error?.message || detail; } catch { /* not JSON */ }
+  return new Error(`OpenRouter API: HTTP ${response.status} — ${detail}`);
 }
 
 // === Zajednička infrastruktura ===
@@ -173,24 +114,12 @@ function updateGlobalUsage(usage) {
   return usageWrite;
 }
 
-function calculateUsage(provider, modelName, promptTokens = 0, outputTokens = 0) {
-  promptTokens = Number.isFinite(promptTokens) && promptTokens >= 0 ? promptTokens : 0;
-  outputTokens = Number.isFinite(outputTokens) && outputTokens >= 0 ? outputTokens : 0;
-  let pricing;
-  if (provider === 'gemini') {
-    pricing = modelName.includes('lite') ? PRICING["gemini-lite"] : PRICING.gemini;
-    if (modelName === GEMINI_MODELS[0] && Date.now() >= Date.UTC(2027, 0, 1)) {
-      pricing = { input: 1.50, output: 7.50 };
-    }
-  } else pricing = { input: 0, output: 0 };
-  const costInput = (promptTokens / 1_000_000) * pricing.input;
-  const costOutput = (outputTokens / 1_000_000) * pricing.output;
-  const estimatedCost = (costInput + costOutput).toFixed(6);
-  return { promptTokens, outputTokens, totalTokens: promptTokens + outputTokens, estimatedCost };
-}
-
+// Small models often leave a code fence unclosed or wrap the JSON in a sentence.
 function cleanJsonResponse(text) {
-  return text.trim().replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/i, '$1').trim();
+  const unfenced = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  const start = unfenced.search(/[[{]/);
+  const end = Math.max(unfenced.lastIndexOf(']'), unfenced.lastIndexOf('}'));
+  return start >= 0 && end > start ? unfenced.slice(start, end + 1) : unfenced;
 }
 
 // === Glavni LLM request ===
@@ -200,43 +129,28 @@ async function llmRequest(config, systemInstruction, userMessage, history = [], 
   config = normalizeLlmConfig(config);
   if (!Number.isInteger(maxRetries) || maxRetries < 0) throw new Error('Invalid retry count.');
   let attempt = 0;
-  
+
   while (attempt <= maxRetries) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
 
     try {
-      const isGemini = config.provider === 'gemini';
-      const { url, headers, body } = isGemini
-        ? buildGeminiRequest(config, systemInstruction, userMessage, history)
-        : buildOpenRouterRequest(config, systemInstruction, userMessage, history);
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body,
-        signal: controller.signal
-      });
+      const { url, headers, body } = buildOpenRouterRequest(config, systemInstruction, userMessage, history);
+      const response = await fetch(url, { method: 'POST', headers, body, signal: controller.signal });
 
       if (!response.ok) {
         if ([502, 503, 504].includes(response.status) && attempt < maxRetries) {
           clearTimeout(timeoutId);
           attempt++;
-          const waitTime = Math.pow(2, attempt) * 1000 + Math.random() * 1000; // Exponential backoff + jitter
+          const waitTime = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
           console.warn(`[LLM] HTTP ${response.status}. Retry ${attempt}/${maxRetries} in ${Math.round(waitTime)}ms.`);
           await new Promise(r => setTimeout(r, waitTime));
-          continue; // Probaj ponovo
+          continue;
         }
-        
-        handleHttpError(response, config.provider);
-        const errText = await response.text().catch(() => '');
-        throw new Error(`${config.provider} API: HTTP ${response.status} — ${errText.substring(0, 200)}`);
+        throw await httpError(response);
       }
 
-      const result = await response.json();
-      return isGemini
-        ? parseGeminiResponse(result, config)
-        : parseOpenRouterResponse(result, config);
+      return parseOpenRouterResponse(await response.json());
     } catch (error) {
       if (controller.signal.aborted) throw new Error('API request timed out. Please try again.');
       throw error;
@@ -403,7 +317,7 @@ function llmQuiz(config, transcript, outputLanguage = 'English') {
 
 function llmChat(config, transcript, history, userMessage, outputLanguage = 'English') {
   return llmTask(config, transcript, {
-    instruction: `Odgovaraj na pitanja korisnika na osnovu ovog transkripta na ${outputLanguage} jeziku. Zadrži format [MM:SS] ako citiraš deo videa.`,
+    instruction: `Odgovaraj na pitanja korisnika na osnovu ovog transkripta. Zadrži format [MM:SS] ako citiraš deo videa.`,
     userMessage,
     history,
     outputLanguage
@@ -412,15 +326,13 @@ function llmChat(config, transcript, history, userMessage, outputLanguage = 'Eng
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    GEMINI_MODELS,
-    LLM_PROVIDERS,
+    OPENROUTER_URL,
+    DEFAULT_MODEL,
     normalizeLlmConfig,
     assertSupportedConfig,
-    buildGeminiRequest,
     buildOpenRouterRequest,
-    parseGeminiResponse,
     parseOpenRouterResponse,
-    calculateUsage,
+    buildUsage,
     llmRequest,
     chunkTranscript,
     llmSummarizeLong,

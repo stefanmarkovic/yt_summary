@@ -13,7 +13,7 @@ beforeEach(() => {
   Object.assign(global, { getLocalizedString, localizePage, markdownToHtml, setSafeHTML, escapeHtml, renderSummaryCard });
   store = {
     yt_summary_result: { id: 'second', videoId: 'bbbbbbbbbbb', title: 'Latest video B', summary: 'B summary', timestamp: 2 },
-    llm_config: { apiKey: 'key', provider: 'gemini', model: 'model', uiLanguage: 'en' },
+    llm_config: { apiKey: 'key', provider: 'openrouter', model: 'model', uiLanguage: 'en' },
     yt_result_first: {
       result: { id: 'first', videoId: 'aaaaaaaaaaa', title: 'Original video A', summary: 'A summary', timestamp: 1, chapters: [{ title: 'A chapter' }], persona: 'skeptic', outputLang: 'Srpski', entities: ['A entity'] },
       transcript: 'Transcript A'
@@ -102,4 +102,12 @@ test('legacy summary can be read but mismatched legacy transcript actions stay d
   expect(document.getElementById('download-transcript-btn').disabled).toBe(true);
   expect(document.getElementById('detail-short').disabled).toBe(true);
   expect(llmExtractEntities).not.toHaveBeenCalled();
+});
+
+test('Serbian UI shows the date in Latin script like the rest of the page', async () => {
+  store.llm_config.uiLanguage = 'sr';
+  await resultPage.init();
+  const date = document.getElementById('meta-date').textContent;
+  expect(date).toMatch(/januar/);
+  expect(date).not.toMatch(/[Ѐ-ӿ]/);
 });

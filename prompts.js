@@ -13,6 +13,14 @@ const PERSONA_PROMPTS = {
   "journalist": "Preuzmi ulogu profesionalnog novinara. Prenesi ključne informacije iz videa u formi jasnog, objektivnog i lako čitljivog novinarskog izveštaja, ističući najvažnije vesti, činjenice i zaključke."
 };
 
+// The popup stores native language names; models follow an explicit English name far more reliably.
+const OUTPUT_LANGUAGE_NAMES = {
+  "English": "English",
+  "Srpski": "Serbian (Latin script)",
+  "Deutsch": "German",
+  "Español": "Spanish"
+};
+
 function resolvePersona(personaValue, customPrompts = []) {
   if (typeof personaValue !== 'string') return 'standard';
   const match = personaValue.match(/^custom_(\d+)$/);
@@ -26,7 +34,7 @@ function resolvePersona(personaValue, customPrompts = []) {
 function buildSystemInstruction(transcript, taskSpec) {
   let prompt = `Transkript YouTube videa:\n${transcript}\n\n`;
   
-  const outputLanguage = taskSpec.outputLanguage || 'English';
+  const outputLanguage = OUTPUT_LANGUAGE_NAMES[taskSpec.outputLanguage] || taskSpec.outputLanguage || 'English';
 
   if (taskSpec.chapters && taskSpec.chapters.length > 0) {
     prompt += `Zvanična poglavlja videa:\n`;
@@ -37,7 +45,7 @@ function buildSystemInstruction(transcript, taskSpec) {
     });
     if (taskSpec.summary) prompt += `\nKoristi ova poglavlja da strukturiraš sažetak.\n`;
   }
-  prompt += `Instrukcija: ${taskSpec.instruction} Odgovaraj na ${outputLanguage} jeziku (Respond in ${outputLanguage} language).`;
+  prompt += `Instrukcija: ${taskSpec.instruction} Respond in ${outputLanguage}.`;
   if (taskSpec.summary) {
     prompt += ` Na početku stavi jednu rečenicu sa prefiksom 'TL;DR:' koja sažima ceo video.`;
   }
@@ -49,9 +57,10 @@ function buildSystemInstruction(transcript, taskSpec) {
   } else if (taskSpec.persona && !Object.prototype.hasOwnProperty.call(PERSONA_PROMPTS, taskSpec.persona)) {
     prompt += `\n\nTON I STIL: ${taskSpec.persona}`;
   }
+  prompt += `\n\nLANGUAGE: Write the entire response in ${outputLanguage}, even if the transcript is in another language.`;
   return prompt;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { DETAIL_PROMPTS, PERSONA_PROMPTS, resolvePersona, buildSystemInstruction };
+  module.exports = { DETAIL_PROMPTS, PERSONA_PROMPTS, OUTPUT_LANGUAGE_NAMES, resolvePersona, buildSystemInstruction };
 }

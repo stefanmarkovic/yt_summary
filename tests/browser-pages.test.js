@@ -6,9 +6,8 @@ const vm = require('vm');
 const { JSDOM } = require('jsdom');
 
 const config = {
-  provider: 'gemini',
-  model: 'gemini-3.7-flash',
-  url: 'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
+  provider: 'openrouter',
+  model: 'mistralai/mistral-nemo',
   apiKey: 'fixture-key',
   uiLanguage: 'en',
   outputLanguage: 'English',
@@ -47,7 +46,7 @@ describe('extension pages with their actual browser script order', () => {
       fetch: fetchMock,
       AbortController,
       browser: {
-        runtime: { getManifest: () => ({ version: '4.4.1' }), getURL: file => `https://extension.test/${file}` },
+        runtime: { getManifest: () => ({ version: '4.5.0' }), getURL: file => `https://extension.test/${file}` },
         storage: {
           local: storageArea({ llm_config: config, yt_summary_result: result }),
           session: storageArea({ yt_result_fixture: { result, transcript: '[0:00] Fixture transcript.' } }),
@@ -72,7 +71,7 @@ describe('extension pages with their actual browser script order', () => {
 
   test('popup initializes and opens settings with browser globals, without CommonJS exports', async () => {
     const document = await openPage('popup.html');
-    expect(document.getElementById('plugin-version').textContent).toBe('v4.4.1');
+    expect(document.getElementById('plugin-version').textContent).toBe('v4.5.0');
     document.getElementById('settings-btn').click();
     expect(document.getElementById('setup-view').classList.contains('hidden')).toBe(false);
     expect(document.getElementById('api-model-input').value).toBe(config.model);
