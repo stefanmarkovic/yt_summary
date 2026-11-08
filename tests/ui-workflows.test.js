@@ -2,7 +2,6 @@ const { initChat } = require('../chat.js');
 const { handleGenerateQuiz } = require('../quiz.js');
 const { markdownToHtml, setSafeHTML } = require('../markdown-renderer.js');
 const { getLocalizedString } = require('../i18n.js');
-const { parsePlaylistInitialData, fetchPlaylistResponse } = require('../playlist.js');
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 
 beforeEach(() => {
@@ -59,23 +58,6 @@ test('invalid quiz schema produces a message and restores its button', async () 
   expect(document.querySelector('.quiz-container')).toBeNull();
   expect(document.getElementById('messages').textContent).toContain('invalid quiz');
   expect(button.disabled).toBe(false);
-});
-
-test('playlist JSON parser handles braces and assignment terminators inside string values', () => {
-  const data = { title: 'Escaped " };</script> { title', nested: { value: 1 } };
-  expect(parsePlaylistInitialData(`prefix = ${JSON.stringify(data)}; trailing`, 8)).toEqual(data);
-  expect(() => parsePlaylistInitialData('{"title":"broken"', 0)).toThrow('Incomplete');
-});
-
-test('playlist network timeout aborts response consumption and clears timers', async () => {
-  jest.useFakeTimers();
-  global.fetch = jest.fn((_url, { signal }) => new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('Timed out')))));
-  const request = fetchPlaylistResponse('https://youtube.com', {}, 'text', 100);
-  const settled = request.catch(error => error);
-  await jest.advanceTimersByTimeAsync(100);
-  expect((await settled).message).toBe('Timed out');
-  expect(jest.getTimerCount()).toBe(0);
-  jest.useRealTimers();
 });
 
 test('chat and quiz answer in the configured output language', async () => {

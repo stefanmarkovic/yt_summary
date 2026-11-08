@@ -3,45 +3,43 @@ const { fetchTranscriptInPageContext } = require('../transcript-fetcher.js');
 describe('transcript fast-path selection', () => {
   beforeEach(() => {
     jest.useFakeTimers();
-    document.body.innerHTML = '<div id="movie_player"></div>';
+    document.body.innerHTML = '<div id="movie_player"></div><ytd-video-description-transcript-section-renderer><button>Show transcript</button></ytd-video-description-transcript-section-renderer>';
     document.getElementById('movie_player').getPlayerResponse = () => ({
       videoDetails: { videoId: 'video' },
       captions: { playerCaptionsTracklistRenderer: { captionTracks: [{ languageCode: 'en', baseUrl: 'https://captions.test/video' }] } }
     });
-    window.ytInitialData = {
-      currentVideoEndpoint: { watchEndpoint: { videoId: 'video' } },
-      engagementPanels: [{ engagementPanelSectionListRenderer: {
-        panelIdentifier: 'engagement-panel-searchable-transcript',
-        content: { continuationItemRenderer: { continuationEndpoint: { getTranscriptEndpoint: { params: 'slow' } } } }
-      } }]
-    };
-    window.ytcfg = { get: key => {
-      if (key === 'INNERTUBE_API_KEY') return 'test-key';
-      if (key === 'INNERTUBE_CONTEXT') return { client: { clientName: 'WEB', clientVersion: 'test-version' } };
-      return undefined;
-    } };
   });
   afterEach(() => {
     jest.useRealTimers();
     delete global.fetch;
-    delete window.ytInitialData;
-    delete window.ytcfg;
   });
 
-  test('returns a direct result without waiting for fallback and aborts the losing request', async () => {
-    let fallbackSignal;
-    global.fetch = jest.fn((url, options) => {
-      if (url === 'https://captions.test/video') return Promise.resolve({
-        ok: true, status: 200, headers: { get: () => 'application/json' },
-        text: async () => JSON.stringify({ events: [{ segs: [{ utf8: 'Fast caption' }] }] })
-      });
-      fallbackSignal = options.signal;
-      return new Promise((_resolve, reject) => options.signal.addEventListener('abort', () => reject(new Error('aborted'))));
+  test('a caption result wins before DOM scraping starts, so the page is never clicked', async () => {
+    const transcriptButton = document.querySelector('button');
+    const click = jest.spyOn(transcriptButton, 'click');
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true, status: 200, headers: { get: () => 'application/json' },
+      text: async () => JSON.stringify({ events: [{ segs: [{ utf8: 'Fast caption' }] }] })
     });
     const result = await fetchTranscriptInPageContext('video');
     expect(result.status).toBe('ok');
     expect(result.segments[0].text).toBe('Fast caption');
-    expect(fallbackSignal.aborted).toBe(true);
+    expect(result.debugLines).toContainEqual(expect.stringMatching(/^\+\d+ms Transcript winner: M1$/));
+    expect(result.debugLines.some(line => line.includes('M2: DOM scraping'))).toBe(false);
+    expect(click).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(1);
     expect(jest.getTimerCount()).toBe(0);
+  });
+
+  test('every page debug line carries its elapsed time for speed analysis', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true, status: 200, headers: { get: () => 'text/xml' }, text: async () => ''
+    });
+    const pending = fetchTranscriptInPageContext('video');
+    await jest.advanceTimersByTimeAsync(8000);
+    const result = await pending;
+    expect(result.debugLines.length).toBeGreaterThan(3);
+    expect(result.debugLines.every(line => /^\+\d+ms /.test(line))).toBe(true);
+    expect(result.debugLines).toContainEqual(expect.stringMatching(/M1: finished without segments$/));
   });
 });

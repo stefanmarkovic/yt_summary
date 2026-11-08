@@ -308,7 +308,8 @@ async function initializePopup() {
     log(`=== New Analysis | v${PLUGIN_VERSION} | ${navigator.userAgent.match(/Firefox\/[\d.]+/)?.[0] || '?'} ===`);
     statusDiv.textContent = typeof getLocalizedString === 'function' ? getLocalizedString('status_init', config.uiLanguage || 'en') : "Initializing...";
     summarizeBtn.disabled = true;
-
+    const startedAt = Date.now();
+    const seconds = ms => `${(ms / 1000).toFixed(1)}s`;
 
     try {
       const tabs = await browser.tabs.query({ active: true, currentWindow: true });
@@ -321,6 +322,7 @@ async function initializePopup() {
       // Transcript pipeline: dohvatanje, parsiranje, SponsorBlock filtriranje
       statusDiv.textContent = typeof getLocalizedString === 'function' ? getLocalizedString('status_fetching', config.uiLanguage || 'en') : "Fetching transcript...";
       const transcript = await getProcessedTranscript(tab.id, videoId);
+      const transcriptMs = Date.now() - startedAt;
 
       for (const line of transcript.debugLines) {
         log(`  [PAGE] ${line}`);
@@ -350,9 +352,13 @@ async function initializePopup() {
         log(`[PROGRES] ${msg}`);
       };
 
+      const llmStartedAt = Date.now();
       const result = await llmSummarizeLong(llm_config, transcript.text, detail, persona, transcript.chapters, outputLang, onProgress);
+      const llmMs = Date.now() - llmStartedAt;
       log(`Response: ${result.text.length} chars | Tokens: ${result.usage.promptTokens} in + ${result.usage.outputTokens} out = ${result.usage.totalTokens} total`);
       log(`Cost: ~$${result.usage.estimatedCost}`);
+      for (const call of result.calls || []) log(`[LLM] ${describeLlmCall(call)}`);
+      log(`[TIMING] transcript ${seconds(transcriptMs)} | LLM ${seconds(llmMs)} | total ${seconds(Date.now() - startedAt)}`);
 
       const videoTitle = tab.title?.replace(/^\(\d+\+?\)\s*/, '').replace(/ - YouTube$/, '') || 'Video sažetak';
 
@@ -367,7 +373,7 @@ async function initializePopup() {
         categoryStats: transcript.categoryStats,
         chapters: transcript.chapters,
         usage: result.usage,
-        model: llm_config.model,
+        model: result.calls?.at(-1)?.model || llm_config.model,
         detail,
         persona,
         outputLang,
@@ -382,10 +388,10 @@ async function initializePopup() {
       await browser.tabs.create({ url: browser.runtime.getURL(`result.html?id=${resultId}`) });
 
       statusDiv.textContent = getLocalizedString('status_done', config.uiLanguage || 'en');
-      log("=== Finished — opened new tab ===");
+      log(`=== Finished in ${seconds(Date.now() - startedAt)} — opened new tab ===`);
 
     } catch (error) {
-      log(`ERROR: ${error.message}`);
+      log(`ERROR after ${seconds(Date.now() - startedAt)}: ${error.message}`);
       if (error.debugLines && error.debugLines.length > 0) {
         for (const line of error.debugLines) {
           log(`  [PAGE] ${line}`);

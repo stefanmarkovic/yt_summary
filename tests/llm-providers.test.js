@@ -78,8 +78,24 @@ describe('OpenRouter transport', () => {
       usage: { prompt_tokens: 20, completion_tokens: 7, cost: 0.001234 }
     })).toEqual({
       text: 'OpenRouter answer',
-      usage: { promptTokens: 20, outputTokens: 7, totalTokens: 27, estimatedCost: '0.001234' }
+      usage: { promptTokens: 20, outputTokens: 7, totalTokens: 27, estimatedCost: '0.001234' },
+      meta: { model: null, provider: null }
     });
+  });
+
+  test('reports which model and provider OpenRouter routed to, how long it took and how many attempts', async () => {
+    jest.useFakeTimers();
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockImplementationOnce(() => new Promise(resolve => setTimeout(() => resolve({
+        ok: true,
+        json: async () => ({ model: 'google/gemini-2.5-flash', provider: 'Google', choices: [{ message: { content: 'Routed' } }], usage: { prompt_tokens: 1, completion_tokens: 1 } })
+      }), 1500)));
+    const pending = llmRequest(config, 'system', 'question');
+    await jest.runAllTimersAsync();
+    const { meta } = await pending;
+    expect(meta).toMatchObject({ model: 'google/gemini-2.5-flash', provider: 'Google', attempts: 2 });
+    expect(meta.durationMs).toBeGreaterThanOrEqual(1500 + 2000);
   });
 
   test('empty and error responses produce useful errors', () => {

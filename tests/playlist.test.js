@@ -1,13 +1,14 @@
 const fs = require('fs');
 const { initializePlaylist } = require('../playlist.js');
 const { getLocalizedString, localizePage } = require('../i18n.js');
+const { describeLlmCall } = require('../llm.js');
 
 let session;
 beforeEach(() => {
   jest.useFakeTimers();
   document.body.innerHTML = fs.readFileSync(require('path').join(__dirname, '..', 'playlist.html'), 'utf8');
   window.history.replaceState({}, '', '?id=job-a');
-  Object.assign(global, { getLocalizedString, localizePage });
+  Object.assign(global, { getLocalizedString, localizePage, describeLlmCall });
   session = { 'yt_batch_job-a': { videoIds: ['abcdefghijk'], llmConfig: { apiKey: 'key', uiLanguage: 'en' }, detail: '2', persona: 'standard', outputLang: 'English' } };
   global.browser = {
     storage: {
@@ -36,6 +37,20 @@ test('playlist processes its session job and cleans fallback windows before gene
   expect(browser.storage.session.remove).toHaveBeenCalledWith('yt_batch_job-a');
   expect(document.getElementById('batch-progress').value).toBe(100);
   expect(document.getElementById('batch-results').textContent).toContain('Video A');
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+test('each playlist video logs its LLM calls and where its time went', async () => {
+  llmSummarizeLong.mockResolvedValue({
+    text: 'Summary A', usage: {},
+    calls: [{ phase: 'summary', durationMs: 2000, model: 'qwen/qwen3.7-flash', provider: 'Alibaba', promptTokens: 900, outputTokens: 200, attempts: 1 }]
+  });
+  const run = initializePlaylist();
+  await jest.advanceTimersByTimeAsync(6000);
+  await run;
+  const log = document.getElementById('result-debug-log').value;
+  expect(log).toContain('[LLM] summary: 2.0s, qwen/qwen3.7-flash via Alibaba, 900 in / 200 out tokens, 100 out tok/s');
+  expect(log).toMatch(/\[TIMING\] video 1: window wait 6\.0s \(fixed\) \| transcript \d+\.\ds \| LLM \d+\.\ds \| total \d+\.\ds/);
 });
 
 test('fallback transcript failure still closes its window and avoids an LLM call', async () => {
