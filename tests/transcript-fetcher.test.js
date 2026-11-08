@@ -1,16 +1,15 @@
 const { fetchTranscriptInPageContext } = require('../transcript-fetcher.js');
 
+const segment = (time, text) => `<ytd-transcript-segment-renderer><div class="segment-timestamp">${time}</div><yt-formatted-string class="segment-text">${text}</yt-formatted-string></ytd-transcript-segment-renderer>`;
+
 describe('injected transcript fetcher', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     document.body.innerHTML = '<div id="movie_player"></div>';
-    document.getElementById('movie_player').getPlayerResponse = () => ({
-      videoDetails: { videoId: 'video' },
-      captions: { playerCaptionsTracklistRenderer: { captionTracks: [{ languageCode: 'en', baseUrl: 'https://captions.test/video' }] } }
-    });
+    document.getElementById('movie_player').getPlayerResponse = () => ({ videoDetails: { videoId: 'video' } });
+    global.fetch = jest.fn();
     delete window.ytInitialData;
     delete window.ytInitialPlayerResponse;
-    delete window.ytcfg;
   });
   afterEach(() => {
     jest.useRealTimers();
@@ -18,45 +17,28 @@ describe('injected transcript fetcher', () => {
     delete global.fetch;
     delete window.ytInitialData;
     delete window.ytInitialPlayerResponse;
-    delete window.ytcfg;
   });
 
-  function captionResponse(text) {
-    global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, headers: { get: () => 'text/xml' }, text: async () => text });
-  }
-
-  test('parses XML attributes, markup and numeric entities through the actual injected function', async () => {
-    captionResponse('<transcript><text dur="2" start="1.5">Hello <b>world</b> &amp; &#169; &#x1F600;</text></transcript>');
-    await expect(fetchTranscriptInPageContext('video')).resolves.toMatchObject({
-      status: 'ok', segments: [{ text: 'Hello world & © 😀', startSec: 1.5, durSec: 2 }]
+  test('reads an already open transcript panel with timestamps, and never touches the network', async () => {
+    document.body.insertAdjacentHTML('beforeend', segment('0:01', 'Hello &amp; welcome') + segment('1:02:03', 'Later'));
+    const result = await fetchTranscriptInPageContext('video');
+    expect(result).toMatchObject({
+      status: 'ok',
+      segments: [{ text: 'Hello & welcome', startSec: 1, durSec: 3722 }, { text: 'Later', startSec: 3723 }]
     });
+    expect(result.debugLines).toContainEqual(expect.stringMatching(/^\+\d+ms Transcript panel: already open, 2 segments$/));
+    expect(fetch).not.toHaveBeenCalled();
     expect(jest.getTimerCount()).toBe(0);
   });
 
-  test('decodes double-escaped entities in legacy timedtext captions', async () => {
-    captionResponse('<transcript><text start="0" dur="1">I&amp;#39;m here &amp;amp; ready</text></transcript>');
-    await expect(fetchTranscriptInPageContext('video')).resolves.toMatchObject({
-      status: 'ok', segments: [{ text: "I'm here & ready" }]
+  test('opens the panel through "Show transcript" in the description', async () => {
+    document.body.insertAdjacentHTML('beforeend', '<ytd-video-description-transcript-section-renderer><button>Show transcript</button></ytd-video-description-transcript-section-renderer>');
+    document.querySelector('button').addEventListener('click', () => {
+      document.body.insertAdjacentHTML('beforeend', `<ytd-engagement-panel-section-list-renderer target-id="engagement-panel-searchable-transcript">${segment('0:05', 'From the panel')}</ytd-engagement-panel-section-list-renderer>`);
     });
-  });
-
-  test('parses timed-text XML and captions shorter than the former 50 byte cutoff', async () => {
-    captionResponse('<timedtext><body><p t="1500" d="2000"><s>Hello</s> world</p></body></timedtext>');
-    await expect(fetchTranscriptInPageContext('video')).resolves.toMatchObject({
-      status: 'ok', segments: [{ text: 'Hello world', startSec: 1.5, durSec: 2 }]
-    });
-    captionResponse('<text start="0">Hi</text>');
-    await expect(fetchTranscriptInPageContext('video')).resolves.toMatchObject({ status: 'ok', segments: [{ text: 'Hi' }] });
-  });
-
-  test('ignores invalid JSON event times and non-text fragments', async () => {
-    captionResponse(JSON.stringify({ events: [
-      { tStartMs: 'bad', segs: [{ utf8: 'Invalid time' }] },
-      { tStartMs: 1500, dDurationMs: 2000, segs: [{ utf8: 'Valid' }, {}, { utf8: ' caption' }] }
-    ] }));
-    await expect(fetchTranscriptInPageContext('video')).resolves.toMatchObject({
-      status: 'ok', segments: [{ text: 'Valid caption', startSec: 1.5, durSec: 2 }]
-    });
+    const result = await fetchTranscriptInPageContext('video');
+    expect(result).toMatchObject({ status: 'ok', segments: [{ text: 'From the panel', startSec: 5 }] });
+    expect(result.debugLines).toContainEqual(expect.stringMatching(/Transcript panel: clicked "Show transcript" in the description$/));
   });
 
   test('extracts chapter metadata from current page data and ignores invalid times', async () => {
@@ -71,33 +53,27 @@ describe('injected transcript fetcher', () => {
         }] } } }
       } } }
     };
-    captionResponse('<text start="0">Hi</text>');
+    document.body.insertAdjacentHTML('beforeend', segment('0:00', 'Hi'));
     await expect(fetchTranscriptInPageContext('video')).resolves.toMatchObject({ chapters: [{ title: 'Chapter one', timeSec: 1.5 }] });
     window.ytInitialData.currentVideoEndpoint.watchEndpoint.videoId = 'old-video';
     await expect(fetchTranscriptInPageContext('video')).resolves.toMatchObject({ chapters: [] });
   });
 
-  test('does not fetch stale player captions belonging to another video', async () => {
-    document.getElementById('movie_player').getPlayerResponse = () => ({
-      videoDetails: { videoId: 'old-video' },
-      captions: { playerCaptionsTracklistRenderer: { captionTracks: [{ baseUrl: 'https://captions.test/old' }] } }
-    });
-    global.fetch = jest.fn();
-    const pending = fetchTranscriptInPageContext('video');
-    await jest.runAllTimersAsync();
-    await expect(pending).resolves.toMatchObject({ status: 'error' });
-    expect(fetch).not.toHaveBeenCalled();
-    expect(jest.getTimerCount()).toBe(0);
+  test('ignores a transcript left on the page by the previous video', async () => {
+    document.getElementById('movie_player').getPlayerResponse = () => ({ videoDetails: { videoId: 'old-video' } });
+    document.body.insertAdjacentHTML('beforeend', segment('0:00', 'Old video'));
+    const result = await fetchTranscriptInPageContext('video');
+    expect(result.status).toBe('error');
+    expect(result.debugLines).toContainEqual(expect.stringMatching(/Transcript panel: the player still shows another video, skipping$/));
   });
 
-  test('hung network requests have a deadline', async () => {
-    global.fetch = jest.fn(() => new Promise(() => {}));
+  test('a page without any transcript reports it and leaves no timers behind', async () => {
     const pending = fetchTranscriptInPageContext('video');
     await jest.advanceTimersByTimeAsync(8000);
     const result = await pending;
-    expect(result.status).toBe('error');
-    expect(result.debugLines).toContainEqual(expect.stringMatching(/^\+\d+ms Transcript fetch timed out\.$/));
-    expect(fetch.mock.calls[0][1].signal.aborted).toBe(true);
+    expect(result).toMatchObject({ status: 'error', error: 'No transcript found on the YouTube page.' });
+    expect(result.debugLines.at(-1)).toMatch(/No transcript found on the page$/);
+    expect(result.debugLines.every(line => /^\+\d+ms /.test(line))).toBe(true);
     expect(jest.getTimerCount()).toBe(0);
   });
 });

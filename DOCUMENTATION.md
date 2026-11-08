@@ -21,7 +21,7 @@ Firefox Manifest V3 ekstenzija, verzija 4.5.2. Nema background worker-a: popup p
 ## Tok analize
 
 1. Popup validira aktivni YouTube URL i video ID.
-2. MAIN funkcija pokušava captionTracks (M1), a DOM pokušaj (M2, klik na "Show transcript") kreće nakon 150 ms. Prvi uspešan rezultat završava dohvat. InnerTube `get_transcript` je uklonjen jer vraća HTTP 400 "Precondition check failed". Ukupan deadline je 8 s; AbortController zaustavlja mrežu, DOM čekanja i posmatrače preostalih pokušaja.
+2. MAIN funkcija čita YouTube panel sa transkriptom. Ako je panel već otvoren, čita ga odmah; inače klikne "Show transcript" u opisu videa, a ako tog dugmeta nema, otvara ⋯ meni ispod videa. Ukupan deadline je 8 s; AbortController zaustavlja DOM čekanja i posmatrače. Direktni dohvati su uklonjeni: `captionTracks` timedtext traži PO token i vraća prazno telo (HTTP 200, `len=0`) u svakom stvarnom pokretanju, a InnerTube `get_transcript` vraća HTTP 400 "Precondition check failed".
 3. Podaci player-a se proveravaju prema video ID-ju kako stari SPA podaci ne bi postali transkript novog videa. Parser podržava JSON događaje, XML `text` i timed-text `p` segmente.
 4. SponsorBlock kreće paralelno sa transkriptom. Njegov deadline je 350 ms; mrežna greška, nevalidan odgovor ili nedostupan servis vraćaju praznu listu.
 5. Zajednička obrada odbacuje nevalidne segmente i raspone, sortira titlove, filtrira i dodaje `[MM:SS]` oznake. Prazan rezultat zaustavlja analizu pre AI poziva.
@@ -57,7 +57,7 @@ Dugi transkript se deli približno po rečenicama/rečima i sažima redom. Ako z
 | `local` | `custom_templates` | Korisnički šabloni persona. |
 | `local` | `total_usage` | Ukupni tokeni i zbir procenjenog troška. |
 | `local` | `yt_summary_result` | Poslednji sažetak kao kompatibilni prikaz; bez API ključa i transkripta. |
-| `local` | `yt_debug_logs` | Debug log poslednjeg procesa: `[PAGE] +Nms` redovi strategija, `Page script` i `SponsorBlock` trajanja, `[LLM]` red po pozivu (trajanje, stvarni model i provajder, tokeni, tok/s, pokušaji) i `[TIMING]` zbir po fazama. |
+| `local` | `yt_debug_logs` | Debug log poslednjeg procesa: `[PAGE] +Nms Transcript panel: ...` redovi, `Page script` i `SponsorBlock` trajanja, `[LLM]` red po pozivu (trajanje, stvarni model i provajder, tokeni, tok/s, pokušaji) i `[TIMING]` zbir po fazama. |
 | `session` | `yt_result_<UUID>` | `{result, transcript}` za `result.html?id=<UUID>`. |
 | `session` | `yt_batch_<UUID>` | Privremena konfiguracija i ID-jevi posla za `playlist.html?id=<UUID>`; briše se po završetku. |
 | `session` | `yt_transcript_cache` | Jedan obrađeni video, rezultat i vreme keširanja. |

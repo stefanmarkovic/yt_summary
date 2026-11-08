@@ -5,7 +5,7 @@ Firefox ekstenzija (Manifest V3, verzija 4.5.2) za sažimanje YouTube videa pomo
 ## Šta podržava
 
 - Kratak, srednji i detaljan sažetak; standardni stil, ugrađene persone i sopstveni šabloni.
-- Dohvat postojećih YouTube titlova kroz paralelne API pokušaje i DOM rezervni put.
+- Čitanje YouTube transkripta direktno iz panela "Show transcript" na stranici videa.
 - SponsorBlock filtriranje, vremenske oznake i procenu izostavljenog vremena.
 - Chat, kviz, izdvajanje entiteta, oblak ključnih reči i ponovno sažimanje.
 - Grupnu obradu videa pronađenih na stranici liste.

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YT Summary AI",
-  "version": "4.5.6",
+  "version": "4.5.7",
   "description": "AI sažetak YouTube videa.",
   "permissions": [
     "activeTab",
