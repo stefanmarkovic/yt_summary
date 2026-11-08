@@ -64,6 +64,15 @@ describe('Popup UI interactions', () => {
     expect(store.llm_config.topP).toBe(0);
   });
 
+  test('provider routing defaults to fastest and saves the cheaper choice', async () => {
+    const routing = document.getElementById('routing-select');
+    expect(routing.value).toBe('fastest');
+    routing.value = 'balanced';
+    document.getElementById('save-key-btn').click();
+    await flush();
+    expect(store.llm_config.routing).toBe('balanced');
+  });
+
   test.each([
     ['https://www.youtube.com/watch?v=abcdefghijk', 'abcdefghijk'],
     ['https://youtu.be/abcdefghijk?t=2', 'abcdefghijk'],

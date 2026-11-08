@@ -64,12 +64,19 @@ describe('OpenRouter transport', () => {
       model: 'openrouter/auto',
       temperature: 0.4,
       top_p: 0.9,
+      provider: { sort: 'throughput' },
       messages: [
         { role: 'system', content: 'system' },
         { role: 'assistant', content: 'previous answer' },
         { role: 'user', content: 'new question' }
       ]
     });
+  });
+
+  test('balanced routing leaves provider choice to OpenRouter, and unknown values fall back to fastest', () => {
+    const balanced = buildOpenRouterRequest(normalizeLlmConfig({ ...config, routing: 'balanced' }), 'system', 'q', []);
+    expect(JSON.parse(balanced.body).provider).toBeUndefined();
+    expect(normalizeLlmConfig({ routing: 'nitro' }).routing).toBe('fastest');
   });
 
   test('parses text, token usage and the cost OpenRouter reports', () => {

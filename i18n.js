@@ -88,7 +88,10 @@ const I18N = {
     "custom_prefix": "Custom",
     "context_window": "Context window:",
     "temperature": "Temperature:",
-    "top_p": "Top P:"
+    "top_p": "Top P:",
+    "routing": "Provider:",
+    "routing_fastest": "Fastest",
+    "routing_balanced": "Cheaper"
   },
   sr: {
     "app_title": "YT Summary AI",
@@ -178,7 +181,10 @@ const I18N = {
     "custom_prefix": "Prilagođeno",
     "context_window": "Kontekstni prozor:",
     "temperature": "Temperatura:",
-    "top_p": "Top P:"
+    "top_p": "Top P:",
+    "routing": "Provajder:",
+    "routing_fastest": "Najbrži",
+    "routing_balanced": "Jeftiniji"
   },
   de: {
     "app_title": "YT Summary AI",
@@ -268,7 +274,10 @@ const I18N = {
     "custom_prefix": "Benutzerdefiniert",
     "context_window": "Kontextfenster:",
     "temperature": "Temperatur:",
-    "top_p": "Top P:"
+    "top_p": "Top P:",
+    "routing": "Anbieter:",
+    "routing_fastest": "Am schnellsten",
+    "routing_balanced": "Günstiger"
   },
   es: {
     "app_title": "YT Summary AI",
@@ -358,7 +367,10 @@ const I18N = {
     "custom_prefix": "Personalizado",
     "context_window": "Ventana de contexto:",
     "temperature": "Temperatura:",
-    "top_p": "Top P:"
+    "top_p": "Top P:",
+    "routing": "Proveedor:",
+    "routing_fastest": "El más rápido",
+    "routing_balanced": "Más barato"
   }
 };
 

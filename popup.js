@@ -13,6 +13,7 @@ async function initializePopup() {
   const contextWindowInput = document.getElementById('context-window-input');
   const temperatureInput = document.getElementById('temperature-input');
   const topPInput = document.getElementById('top-p-input');
+  const routingSelect = document.getElementById('routing-select');
 
   const saveKeyBtn = document.getElementById('save-key-btn');
   const cancelBtn = document.getElementById('cancel-btn');
@@ -77,6 +78,7 @@ async function initializePopup() {
   contextWindowInput.value = config.contextWindow || 32768;
   temperatureInput.value = config.temperature ?? 0.7;
   topPInput.value = config.topP ?? 1.0;
+  routingSelect.value = normalizeLlmConfig(config).routing;
 
   uiLanguageSelect.value = config.uiLanguage || 'en';
   outputLanguageSelect.value = config.outputLanguage || 'English';
@@ -167,6 +169,7 @@ async function initializePopup() {
       contextWindow: parseInt(contextWindowInput.value) || 32768,
       temperature: Number.isFinite(parseFloat(temperatureInput.value)) ? parseFloat(temperatureInput.value) : 0.7,
       topP: Number.isFinite(parseFloat(topPInput.value)) ? parseFloat(topPInput.value) : 1.0,
+      routing: routingSelect.value,
       uiLanguage: uiLanguageSelect.value,
       outputLanguage: outputLanguageSelect.value
     });
@@ -342,7 +345,7 @@ async function initializePopup() {
       const persona = resolvePersona(document.getElementById('persona-level').value, customPrompts);
       const outputLang = llm_config.outputLanguage || 'English';
       
-      log(`LLM: provider=${llm_config.provider}, model=${llm_config.model}, detail=${detail}, persona=${Object.prototype.hasOwnProperty.call(PERSONA_PROMPTS, persona) ? persona : 'custom'}, outputLang=${outputLang}`);
+      log(`LLM: provider=${llm_config.provider}, model=${llm_config.model}, routing=${normalizeLlmConfig(llm_config).routing}, detail=${detail}, persona=${Object.prototype.hasOwnProperty.call(PERSONA_PROMPTS, persona) ? persona : 'custom'}, outputLang=${outputLang}`);
       if (transcript.chapters && transcript.chapters.length > 0) {
         log(`Chapters: ${transcript.chapters.length} found.`);
       }
