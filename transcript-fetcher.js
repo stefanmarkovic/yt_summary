@@ -7,7 +7,8 @@
 async function fetchTranscriptInPageContext(videoId) {
   const D = [];
   const controller = new AbortController();
-  function dbg(msg) { D.push(msg); }
+  const startedAt = performance.now();
+  function dbg(msg) { D.push(`+${Math.round(performance.now() - startedAt)}ms ${msg}`); }
 
   function parseCaptions(text) {
     // 1. Probaj kao JSON
@@ -176,127 +177,7 @@ async function fetchTranscriptInPageContext(videoId) {
     return null;
   }
 
-  // ======= Strategija 2: /get_transcript iz MAIN world-a =======
-  async function tryInnerTube(signal) {
-    dbg("M2: /get_transcript from MAIN world");
-    let transcriptParams = null;
-    if (window.ytInitialData?.engagementPanels) {
-      // Staleness check: ytInitialData may belong to a previously viewed video on SPA navigation
-      const ytDataVideoId = window.ytInitialData?.currentVideoEndpoint?.watchEndpoint?.videoId
-        || window.ytInitialData?.playerOverlays?.playerOverlayRenderer?.videoDetails?.playerOverlayVideoDetailsRenderer?.title?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId;
-      if (ytDataVideoId && ytDataVideoId !== videoId) {
-        dbg(`M2: stale ytInitialData (${ytDataVideoId} != ${videoId}), skipping`);
-        return null;
-      }
-      for (const panel of window.ytInitialData.engagementPanels) {
-        const r = panel.engagementPanelSectionListRenderer;
-        if (r?.panelIdentifier === 'engagement-panel-searchable-transcript') {
-          const endpoint = r.content?.continuationItemRenderer?.continuationEndpoint?.getTranscriptEndpoint;
-          if (endpoint?.params) {
-            try { transcriptParams = decodeURIComponent(endpoint.params); }
-            catch { transcriptParams = endpoint.params; }
-            dbg(`M2: params found (${transcriptParams.substring(0, 30)}...)`);
-          }
-          break;
-        }
-      }
-    }
-
-    if (!transcriptParams) {
-      dbg("M2: params not found in ytInitialData");
-      return null;
-    }
-
-    // Dynamic API key extraction
-    let apiKey = window.ytcfg?.get?.('INNERTUBE_API_KEY');
-    if (!apiKey) {
-      const match = document.documentElement.innerHTML.match(/"INNERTUBE_API_KEY"\s*:\s*"([^"]+)"/)
-        || document.documentElement.innerHTML.match(/"innertubeApiKey"\s*:\s*"([^"]+)"/);
-      if (match) apiKey = match[1];
-    }
-    if (!apiKey) { dbg('M2: no current API key'); return null; }
-
-    // Dynamic client version extraction
-    let clientVersion;
-    if (window.ytcfg?.get?.('INNERTUBE_CONTEXT')?.client?.clientVersion) {
-      clientVersion = window.ytcfg.get('INNERTUBE_CONTEXT').client.clientVersion;
-    } else {
-      const match = document.documentElement.innerHTML.match(/"clientVersion"\s*:\s*"([^"]+)"/)
-        || document.documentElement.innerHTML.match(/"INNERTUBE_CLIENT_VERSION"\s*:\s*"([^"]+)"/);
-      if (match) clientVersion = match[1];
-    }
-    if (!clientVersion) { dbg('M2: no current client version'); return null; }
-
-    let ctx = null;
-    if (window.ytcfg?.get?.('INNERTUBE_CONTEXT')) {
-      try {
-        ctx = JSON.parse(JSON.stringify(window.ytcfg.get('INNERTUBE_CONTEXT')));
-      } catch (e) {
-        dbg(`M2: failed to clone INNERTUBE_CONTEXT: ${e.message}`);
-      }
-    }
-
-    if (!ctx) {
-      ctx = {
-        client: {
-          clientName: "WEB",
-          clientVersion: clientVersion,
-          hl: window.ytcfg?.get?.('HL') || "en",
-          gl: window.ytcfg?.get?.('GL') || "US",
-          utcOffsetMinutes: -new Date().getTimezoneOffset()
-        }
-      };
-    } else if (ctx.client) {
-      // Ensure clientVersion is up to date in the cloned context
-      ctx.client.clientVersion = clientVersion;
-    }
-
-    try {
-      const resp = await fetch(`/youtubei/v1/get_transcript?key=${apiKey}`, {
-        method: 'POST',
-        credentials: 'include',
-        signal,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ context: ctx, params: transcriptParams })
-      });
-      dbg(`M2: HTTP ${resp.status}`);
-
-      if (!resp.ok) {
-        const errTxt = await resp.text();
-        dbg(`M2: err: ${errTxt.substring(0, 150)}`);
-        return null;
-      }
-
-      const data = await resp.json();
-      const segments = [];
-      for (const action of (data.actions || [])) {
-        const panel = action.updateEngagementPanelAction?.content?.transcriptRenderer
-          || action.updateEngagementPanelAction?.content;
-        const body = panel?.body?.transcriptBodyRenderer
-          || panel?.transcriptRenderer?.body?.transcriptBodyRenderer;
-        if (body?.initialSegments) {
-          for (const seg of body.initialSegments) {
-            const sr = seg.transcriptSegmentRenderer;
-            if (sr) {
-              const text = (sr.snippet?.runs || []).map(r => r.text || '').join('') || sr.snippet?.simpleText || '';
-              const startMs = parseInt(sr.startMs || '0', 10);
-              const endMs = parseInt(sr.endMs || '0', 10);
-              if (text.trim() && Number.isFinite(startMs) && startMs >= 0 && Number.isFinite(endMs)) {
-                segments.push({ text: text.trim(), startSec: startMs / 1000, durSec: Math.max(0, endMs - startMs) / 1000 });
-              }
-            }
-          }
-        }
-      }
-      dbg(`M2: ${segments.length} segments`);
-      return segments.length > 0 ? segments : null;
-    } catch (e) {
-      dbg(`M2 err: ${e.message}`);
-      return null;
-    }
-  }
-
-  // ======= Strategija 3: DOM Scraping =======
+  // ======= Strategija 2: DOM Scraping =======
   async function tryDomScraping() {
     if (controller.signal.aborted) return null;
     // SPA navigation can leave the previous video's transcript in the DOM.
@@ -304,23 +185,23 @@ async function fetchTranscriptInPageContext(videoId) {
       const player = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
       const response = typeof player?.getPlayerResponse === 'function' ? player.getPlayerResponse() : window.ytInitialPlayerResponse;
       if (response?.videoDetails?.videoId && response.videoDetails.videoId !== videoId) {
-        dbg('M3: stale player, ignoring transcript DOM');
+        dbg('M2: stale player, ignoring transcript DOM');
         return null;
       }
-    } catch (error) { dbg(`M3 player check: ${error.message}`); }
-    dbg("M3: DOM scraping");
+    } catch (error) { dbg(`M2 player check: ${error.message}`); }
+    dbg("M2: DOM scraping");
 
     // Provera da li su segmenti već u DOM-u (npr. otvoren sidebar)
     let transcriptSegs = document.querySelectorAll('ytd-transcript-segment-renderer');
     if (transcriptSegs.length > 0) {
-      dbg(`M3: found ${transcriptSegs.length} segments already present in DOM`);
+      dbg(`M2: found ${transcriptSegs.length} segments already present in DOM`);
       return readTranscriptFromDOM(transcriptSegs);
     }
 
     let descriptionBtnFound = false;
 
     // Strategija A: Transcript dugme u opisu videa
-    dbg("M3-A: transcript button in description");
+    dbg("M2-A: transcript button in description");
     try {
       const expandBtns = document.querySelectorAll(
         'tp-yt-paper-button#expand, #description-inline-expander tp-yt-paper-button, ' +
@@ -342,22 +223,22 @@ async function fetchTranscriptInPageContext(videoId) {
       );
       if (descTranscriptBtn) {
         descriptionBtnFound = true;
-        dbg("M3-A: click on transcript button in description");
+        dbg("M2-A: click on transcript button in description");
         descTranscriptBtn.click();
         const panelSegments = await waitForTranscriptPanelSegments(3000);
         if (panelSegments?.length > 0) {
-          dbg(`M3-A: found ${panelSegments.length} segments`);
+          dbg(`M2-A: found ${panelSegments.length} segments`);
           return readTranscriptFromDOM(panelSegments);
         }
       } else {
-        dbg("M3-A: no transcript button in description");
+        dbg("M2-A: no transcript button in description");
       }
-    } catch (e) { dbg(`M3-A err: ${e.message}`); }
+    } catch (e) { dbg(`M2-A err: ${e.message}`); }
 
     // Strategija B: Tri-tačke meni → "Show transcript" (samo ako opis dugme nije nađeno)
     if (controller.signal.aborted) return null;
     if (!descriptionBtnFound) {
-      dbg("M3-B: three-dot menu");
+      dbg("M2-B: three-dot menu");
       try {
         const menuSelectors = [
           'ytd-watch-metadata ytd-menu-renderer yt-icon-button',
@@ -374,7 +255,7 @@ async function fetchTranscriptInPageContext(videoId) {
           menuBtn = null;
         }
         if (menuBtn) {
-          dbg("M3-B: click on menu button");
+          dbg("M2-B: click on menu button");
           menuBtn.click();
           await new Promise(r => setTimeout(r, 500));
           if (controller.signal.aborted) return null;
@@ -384,13 +265,13 @@ async function fetchTranscriptInPageContext(videoId) {
             'ytd-menu-popup-renderer tp-yt-paper-item, ' +
             'ytd-popup-container ytd-menu-service-item-renderer'
           );
-          dbg(`M3-B: ${menuItems.length} items in menu`);
+          dbg(`M2-B: ${menuItems.length} items in menu`);
 
           let found = false;
           for (const item of menuItems) {
             const txt = (item.textContent || '').toLowerCase();
             if (txt.includes('transcript') || txt.includes('transkript') || txt.includes('prepis')) {
-              dbg(`M3-B: click on "${item.textContent.trim().substring(0, 30)}"`);
+              dbg(`M2-B: click on "${item.textContent.trim().substring(0, 30)}"`);
               item.click();
               found = true;
               break;
@@ -403,41 +284,41 @@ async function fetchTranscriptInPageContext(videoId) {
               await new Promise(r => setTimeout(r, 300));
               if (controller.signal.aborted) return null;
               transcriptSegs = document.querySelectorAll('ytd-transcript-segment-renderer');
-              dbg(`M3-B: ${transcriptSegs.length} segments`);
+              dbg(`M2-B: ${transcriptSegs.length} segments`);
               if (transcriptSegs.length > 0) return readTranscriptFromDOM(transcriptSegs);
             } else {
-              dbg("M3-B: segments did not appear");
+              dbg("M2-B: segments did not appear");
             }
           } else {
             document.body.click();
-            dbg("M3-B: transcript option not found");
+            dbg("M2-B: transcript option not found");
           }
         } else {
-          dbg("M3-B: menu button not found");
+          dbg("M2-B: menu button not found");
         }
-      } catch (e) { dbg(`M3-B err: ${e.message}`); }
+      } catch (e) { dbg(`M2-B err: ${e.message}`); }
     } else {
-      dbg("M3-B skipped: description button was found");
+      dbg("M2-B skipped: description button was found");
     }
 
     // Strategija C: Direktno proveri engagement panel
     if (controller.signal.aborted) return null;
-    dbg("M3-C: engagement panel check");
+    dbg("M2-C: engagement panel check");
     try {
       const panels = document.querySelectorAll('ytd-engagement-panel-section-list-renderer');
       for (const panel of panels) {
         const panelId = panel.getAttribute('panel-id') || panel.getAttribute('target-id') || '';
         if (panelId.includes('transcript')) {
-          dbg(`M3-C: panel id="${panelId}" visibility=${panel.getAttribute('visibility')}`);
+          dbg(`M2-C: panel id="${panelId}" visibility=${panel.getAttribute('visibility')}`);
         }
       }
       const panelSegments = await waitForTranscriptPanelSegments(descriptionBtnFound ? 0 : 1500);
       if (panelSegments?.length > 0) {
-        dbg(`M3-C: ${panelSegments.length} segments from panel`);
+        dbg(`M2-C: ${panelSegments.length} segments from panel`);
         return readTranscriptFromDOM(panelSegments);
       }
-      dbg(`M3-C: ${panels.length} panels, none with transcript`);
-    } catch (e) { dbg(`M3-C err: ${e.message}`); }
+      dbg(`M2-C: ${panels.length} panels, none with transcript`);
+    } catch (e) { dbg(`M2-C err: ${e.message}`); }
 
     return null;
   }
@@ -476,18 +357,15 @@ async function fetchTranscriptInPageContext(videoId) {
     const chapters = getChapters();
     if (chapters.length > 0) dbg(`Found ${chapters.length} chapters`);
 
-    // Oba API puta kreću paralelno, ali ne čekamo sporiji kada jedan već uspe.
-    // Gubitnički zahtev se prekida kako ne bi nastavio da troši mrežu u pozadini.
-    const apiAttempts = [
-      tryBaseUrl(controller.signal),
-      tryInnerTube(controller.signal)
-    ];
+    // Captions and DOM scraping race; the loser is aborted so it stops using the network and the page.
+    // InnerTube /get_transcript was removed: since late 2026 it answers 400 "Precondition check failed".
     const domAttempt = new Promise(resolve => { domTimer = setTimeout(resolve, 150); }).then(() => (
       controller.signal.aborted ? null : tryDomScraping()
     ));
-    const attempts = [...apiAttempts, domAttempt];
+    const attempts = [tryBaseUrl(controller.signal), domAttempt];
     const successfulAttempts = attempts.map((attempt, index) => attempt.then(segments => {
       if (segments && segments.length > 0) return { index, segments };
+      if (!controller.signal.aborted) dbg(`M${index + 1}: finished without segments`);
       throw new Error(`M${index + 1} returned no segments`);
     }));
 

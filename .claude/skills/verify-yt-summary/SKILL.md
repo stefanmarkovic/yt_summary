@@ -115,8 +115,8 @@ node $Y stop          # prints {stopped, firefoxGone, profileRemoved, evidence}
 
 - **YouTube serves no transcript to an automated Firefox, signed in or not.** A run seeded with the user's signed-in YouTube cookies (`ytcfg LOGGED_IN` true, Premium) failed the same way. There the video played, and YouTube's own player requested `timedtext` with a `pot` token and `fmt=json3`, yet it got HTTP 200 with an empty body and showed no captions on screen. The block is on the automated browser, not on the extension or the login, so do not retry with cookies. In both headless and headed runs all three fetcher strategies fail:
   - M1: `timedtext` returns HTTP 200 with an empty body.
-  - M2: `get_transcript` returns HTTP 400 "Precondition check failed".
-  - M3: the DOM scrape finds the new `PAmodern_transcript_view` panel, which never leaves its spinner. YouTube's own "Show transcript" panel spins forever in this profile too.
+  - M2: the DOM scrape finds the new `PAmodern_transcript_view` panel, which never leaves its spinner. YouTube's own "Show transcript" panel spins forever in this profile too.
+  - InnerTube `get_transcript` (the former M2) was removed in 4.5.2. It answered HTTP 400 "Precondition check failed" even in the user's real, signed-in Firefox, where M2 (then M3) succeeded with 331 segments.
 
   So summarize, the result page, chat/quiz and playlist cannot be proven end to end here. The popup reports `Error: All methods failed.`, and the per-strategy lines are in `#debug-log`. Check the precondition before claiming those features (see `features/summarize.md`). Never seed a fake result to get past it.
 - **The working tree can be inconsistent with HEAD.** `doctor` catches the case where `popup.js` needs symbols that `llm.js` lacks. Prove the intended code with `--src` pointing at the right checkout, and say which one you used.

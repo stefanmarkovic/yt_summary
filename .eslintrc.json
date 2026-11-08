@@ -44,7 +44,8 @@
     "CATEGORY_LABELS": "readonly",
     "formatDuration": "readonly",
     "DEFAULT_MODEL": "readonly",
-    "normalizeLlmConfig": "readonly"
+    "normalizeLlmConfig": "readonly",
+    "describeLlmCall": "readonly"
   },
   "ignorePatterns": [
     "node_modules/",

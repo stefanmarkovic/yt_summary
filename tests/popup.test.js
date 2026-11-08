@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { DEFAULT_MODEL, normalizeLlmConfig } = require('../llm.js');
+const { DEFAULT_MODEL, normalizeLlmConfig, describeLlmCall } = require('../llm.js');
 const { getLocalizedString, localizePage } = require('../i18n.js');
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -22,6 +22,7 @@ describe('Popup UI interactions', () => {
       scripting: { executeScript: jest.fn().mockRejectedValue(new Error('Permission denied')) }
     };
     global.DEFAULT_MODEL = DEFAULT_MODEL;
+    global.describeLlmCall = describeLlmCall;
     global.normalizeLlmConfig = normalizeLlmConfig;
     global.getLocalizedString = getLocalizedString;
     global.localizePage = localizePage;
@@ -106,5 +107,25 @@ describe('Popup UI interactions', () => {
     expect(snapshotWrite[key]).toMatchObject({ result: { videoId: 'abcdefghijk', summary: 'Summary A', persona: 'standard', detail: '2' }, transcript: 'Transcript A' });
     expect(snapshotWrite[key].result.apiKey).toBeUndefined();
     expect(browser.tabs.create).toHaveBeenCalledWith({ url: `moz-extension://test/result.html?id=${snapshotWrite[key].result.id}` });
+  });
+
+  test('the debug log shows where the time went and which model OpenRouter actually used', async () => {
+    global.getProcessedTranscript = jest.fn().mockResolvedValue({ text: 'Transcript A', debugLines: ['+40ms Transcript winner: M2', 'Page script: 900ms'], categoryStats: {}, chapters: [], segmentCount: 1, sponsorCount: 0, savedSeconds: 0 });
+    global.PERSONA_PROMPTS = { standard: 'Standard' };
+    global.resolvePersona = jest.fn(value => value);
+    global.llmSummarizeLong = jest.fn().mockResolvedValue({
+      text: 'Summary A',
+      usage: { promptTokens: 10345, outputTokens: 1115, totalTokens: 11460, estimatedCost: '0.000620' },
+      calls: [{ phase: 'summary', durationMs: 13900, model: 'google/gemini-2.5-flash', provider: 'Google', promptTokens: 10345, outputTokens: 1115, attempts: 1 }]
+    });
+    document.getElementById('summarize-btn').click();
+    await flush();
+    const log = document.getElementById('debug-log').value;
+    expect(log).toContain('[PAGE] +40ms Transcript winner: M2');
+    expect(log).toContain('[LLM] summary: 13.9s, google/gemini-2.5-flash via Google, 10345 in / 1115 out tokens, 80 out tok/s');
+    expect(log).toMatch(/\[TIMING\] transcript \d+\.\ds \| LLM \d+\.\ds \| total \d+\.\ds/);
+    expect(log).toMatch(/=== Finished in \d+\.\ds/);
+    const [snapshot] = Object.values(browser.storage.session.set.mock.calls[0][0]);
+    expect(snapshot.result.model).toBe('google/gemini-2.5-flash');
   });
 });

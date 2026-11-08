@@ -64,25 +64,32 @@ async function getProcessedTranscript(tabId, videoId) {
   }
 
   // 1. SponsorBlock — paralelno sa transkriptom
-  const [sponsorSegments, results] = await Promise.all([
-    getSponsorSegments(videoId),
-    browser.scripting.executeScript({
+  const startedAt = Date.now();
+  const timed = promise => promise.then(value => ({ value, ms: Date.now() - startedAt }));
+  const [sponsor, script] = await Promise.all([
+    timed(getSponsorSegments(videoId)),
+    timed(browser.scripting.executeScript({
       target: { tabId },
       world: "MAIN",
       func: fetchTranscriptInPageContext,
       args: [videoId]
-    })
+    }))
   ]);
+  const sponsorSegments = sponsor.value;
+  const timingLines = [
+    `Page script: ${script.ms}ms`,
+    `SponsorBlock: ${sponsorSegments.length} segments in ${sponsor.ms}ms${sponsor.ms >= SPONSORBLOCK_DEADLINE_MS ? ` (hit the ${SPONSORBLOCK_DEADLINE_MS}ms deadline)` : ''}`
+  ];
 
   // 2. Obrada rezultata iz MAIN world-a
-  const scriptResult = results[0]?.result;
+  const scriptResult = script.value[0]?.result;
   if (!scriptResult) {
     const err = new Error("executeScript did not return a result.");
-    err.debugLines = [];
+    err.debugLines = timingLines;
     throw err;
   }
 
-  const debugLines = Array.isArray(scriptResult.debugLines) ? scriptResult.debugLines : [];
+  const debugLines = [...(Array.isArray(scriptResult.debugLines) ? scriptResult.debugLines : []), ...timingLines];
   if (scriptResult.status !== 'ok') {
     const err = new Error(scriptResult.error || "All methods failed.");
     err.debugLines = debugLines;

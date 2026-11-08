@@ -59,6 +59,11 @@ describe('processed transcript latency', () => {
 
     expect(result.text).toContain('First segment');
     expect(fetch.mock.calls[0][1].signal.aborted).toBe(true);
+    expect(result.debugLines).toEqual(expect.arrayContaining([
+      'fixture transcript ready',
+      expect.stringMatching(/^Page script: \d+ms$/),
+      'SponsorBlock: 0 segments in 350ms (hit the 350ms deadline)'
+    ]));
     expect(jest.getTimerCount()).toBe(0);
   });
 

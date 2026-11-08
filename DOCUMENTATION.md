@@ -1,6 +1,6 @@
 # YT Summary AI — tehnička dokumentacija
 
-Firefox Manifest V3 ekstenzija, verzija 4.5.1. Nema background worker-a: popup pokreće analizu, a stranice rezultata i liste upravljaju svojim aktivnim zahtevima. Zatvaranje tih stranica može prekinuti posao.
+Firefox Manifest V3 ekstenzija, verzija 4.5.2. Nema background worker-a: popup pokreće analizu, a stranice rezultata i liste upravljaju svojim aktivnim zahtevima. Zatvaranje tih stranica može prekinuti posao.
 
 ## Granice modula
 
@@ -14,14 +14,14 @@ Firefox Manifest V3 ekstenzija, verzija 4.5.1. Nema background worker-a: popup p
 | `markdown-renderer.js` | `escapeHtml`, `markdownToHtml`, `setSafeHTML`. Tekst se escape-uje, kod se štiti od Markdown transformacija, a umetnuti HTML se dodatno sanitizuje. |
 | `summary-renderer.js` | Zajednička kartica za rezultat i listu: TL;DR, tekst, entiteti, SponsorBlock statistika, potrošnja i YouTube timestamp linkovi. |
 | `result.js` | Učitava snapshot sa svojim ID-jem; kopiranje, izvoz, regeneracija i izdvajanje entiteta koriste taj rezultat. |
-| `playlist.js` | Direktan dohvat YouTube stranice i InnerTube transkripta; rezervni YouTube prozor; zajedničko filtriranje i renderovanje za svaki video. |
+| `playlist.js` | Za svaki video otvara pozadinski YouTube prozor, preuzima transkript kroz isti pipeline kao popup, pa sažima i renderuje. |
 | `chat.js`, `quiz.js` | Istorija chata i kontrola jednog zahteva; validacija i prikaz kviza sa odvojenim radio grupama. |
 | `i18n.js` | Jezik interfejsa: engleski, srpski, nemački i španski. Jezik AI odgovora je zasebno podešavanje. |
 
 ## Tok analize
 
 1. Popup validira aktivni YouTube URL i video ID.
-2. MAIN funkcija paralelno pokušava captionTracks i InnerTube; DOM pokušaj kreće nakon 150 ms. Prvi uspešan rezultat završava dohvat. Ukupan deadline je 8 s; AbortController zaustavlja mrežu, DOM čekanja i posmatrače preostalih pokušaja.
+2. MAIN funkcija pokušava captionTracks (M1), a DOM pokušaj (M2, klik na "Show transcript") kreće nakon 150 ms. Prvi uspešan rezultat završava dohvat. InnerTube `get_transcript` je uklonjen jer vraća HTTP 400 "Precondition check failed". Ukupan deadline je 8 s; AbortController zaustavlja mrežu, DOM čekanja i posmatrače preostalih pokušaja.
 3. Podaci player-a se proveravaju prema video ID-ju kako stari SPA podaci ne bi postali transkript novog videa. Parser podržava JSON događaje, XML `text` i timed-text `p` segmente.
 4. SponsorBlock kreće paralelno sa transkriptom. Njegov deadline je 350 ms; mrežna greška, nevalidan odgovor ili nedostupan servis vraćaju praznu listu.
 5. Zajednička obrada odbacuje nevalidne segmente i raspone, sortira titlove, filtrira i dodaje `[MM:SS]` oznake. Prazan rezultat zaustavlja analizu pre AI poziva.
@@ -57,7 +57,7 @@ Dugi transkript se deli približno po rečenicama/rečima i sažima redom. Ako z
 | `local` | `custom_templates` | Korisnički šabloni persona. |
 | `local` | `total_usage` | Ukupni tokeni i zbir procenjenog troška. |
 | `local` | `yt_summary_result` | Poslednji sažetak kao kompatibilni prikaz; bez API ključa i transkripta. |
-| `local` | `yt_debug_logs` | Debug log poslednjeg procesa. |
+| `local` | `yt_debug_logs` | Debug log poslednjeg procesa: `[PAGE] +Nms` redovi strategija, `Page script` i `SponsorBlock` trajanja, `[LLM]` red po pozivu (trajanje, stvarni model i provajder, tokeni, tok/s, pokušaji) i `[TIMING]` zbir po fazama. |
 | `session` | `yt_result_<UUID>` | `{result, transcript}` za `result.html?id=<UUID>`. |
 | `session` | `yt_batch_<UUID>` | Privremena konfiguracija i ID-jevi posla za `playlist.html?id=<UUID>`; briše se po završetku. |
 | `session` | `yt_transcript_cache` | Jedan obrađeni video, rezultat i vreme keširanja. |

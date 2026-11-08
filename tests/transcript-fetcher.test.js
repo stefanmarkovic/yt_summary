@@ -96,7 +96,7 @@ describe('injected transcript fetcher', () => {
     await jest.advanceTimersByTimeAsync(8000);
     const result = await pending;
     expect(result.status).toBe('error');
-    expect(result.debugLines).toContain('Transcript fetch timed out.');
+    expect(result.debugLines).toContainEqual(expect.stringMatching(/^\+\d+ms Transcript fetch timed out\.$/));
     expect(fetch.mock.calls[0][1].signal.aborted).toBe(true);
     expect(jest.getTimerCount()).toBe(0);
   });

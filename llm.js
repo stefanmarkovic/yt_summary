@@ -1,6 +1,6 @@
 // LLM transport module (OpenRouter)
 // Prompt construction lives in prompts.js (loaded before this file)
-/* exported llmSummarizeLong, llmExtractEntities, llmQuiz, llmChat, OPENROUTER_URL, DEFAULT_MODEL */
+/* exported llmSummarizeLong, llmExtractEntities, llmQuiz, llmChat, OPENROUTER_URL, DEFAULT_MODEL, describeLlmCall */
 
 const LLM_TIMEOUT_MS = 180_000;
 const promptBuilders = typeof module !== 'undefined' && module.exports ? require('./prompts.js') : null;
@@ -78,7 +78,11 @@ function parseOpenRouterResponse(result) {
     throw new Error(`API did not return a text response.${reason ? ` Reason: ${reason}.` : ''}`);
   }
   const meta = result.usage || {};
-  return { text, usage: buildUsage(meta.prompt_tokens, meta.completion_tokens, meta.cost) };
+  return {
+    text,
+    usage: buildUsage(meta.prompt_tokens, meta.completion_tokens, meta.cost),
+    meta: { model: typeof result.model === 'string' ? result.model : null, provider: typeof result.provider === 'string' ? result.provider : null }
+  };
 }
 
 const HTTP_ERRORS = {
@@ -129,6 +133,7 @@ async function llmRequest(config, systemInstruction, userMessage, history = [], 
   config = normalizeLlmConfig(config);
   if (!Number.isInteger(maxRetries) || maxRetries < 0) throw new Error('Invalid retry count.');
   let attempt = 0;
+  const startedAt = Date.now();
 
   while (attempt <= maxRetries) {
     const controller = new AbortController();
@@ -150,7 +155,10 @@ async function llmRequest(config, systemInstruction, userMessage, history = [], 
         throw await httpError(response);
       }
 
-      return parseOpenRouterResponse(await response.json());
+      const result = parseOpenRouterResponse(await response.json());
+      result.meta.durationMs = Date.now() - startedAt;
+      result.meta.attempts = attempt + 1;
+      return result;
     } catch (error) {
       if (controller.signal.aborted) throw new Error('API request timed out. Please try again.');
       throw error;
@@ -224,8 +232,12 @@ async function llmSummarizeLong(config, transcript, detailLevel, persona, chapte
   const maxChars = Math.floor(config.contextWindow * 3.0);
   const chunks = chunkTranscript(transcript, maxChars);
   
+  const calls = [];
+  const record = (phase, res) => calls.push({ phase, ...res.meta, promptTokens: res.usage.promptTokens, outputTokens: res.usage.outputTokens });
   if (chunks.length <= 1) {
-    return llmSummarize(config, transcript, detailLevel, persona, chapters, outputLanguage);
+    const single = await llmSummarize(config, transcript, detailLevel, persona, chapters, outputLanguage);
+    record('summary', single);
+    return { ...single, calls };
   }
 
   if (onProgress) onProgress(`Video is long. Splitting into ${chunks.length} chunks...`);
@@ -242,6 +254,7 @@ async function llmSummarizeLong(config, transcript, detailLevel, persona, chapte
       outputLanguage
     };
     const res = await llmTask(config, chunks[i], taskSpec);
+    record(`chunk ${i + 1}/${chunks.length}`, res);
     partialSummaries.push(res.text);
     
     totalUsage.promptTokens += res.usage.promptTokens;
@@ -262,6 +275,7 @@ async function llmSummarizeLong(config, transcript, detailLevel, persona, chapte
         instruction: 'Sažmi ove beleške sažeto, sačuvaj ključne činjenice i postojeće vremenske oznake.',
         outputLanguage
       });
+      record(`reduce pass ${pass + 1}`, res);
       reduced.push(res.text);
       totalUsage.promptTokens += res.usage.promptTokens;
       totalUsage.outputTokens += res.usage.outputTokens;
@@ -281,6 +295,7 @@ async function llmSummarizeLong(config, transcript, detailLevel, persona, chapte
   };
   
   const finalRes = await llmTask(config, combinedText, finalTaskSpec);
+  record('final', finalRes);
   
   // Kombinovana potrošnja
   finalRes.usage.promptTokens += totalUsage.promptTokens;
@@ -288,7 +303,13 @@ async function llmSummarizeLong(config, transcript, detailLevel, persona, chapte
   finalRes.usage.totalTokens += totalUsage.totalTokens;
   finalRes.usage.estimatedCost = (parseFloat(finalRes.usage.estimatedCost) + parseFloat(totalUsage.estimatedCost)).toFixed(6);
 
-  return finalRes;
+  return { ...finalRes, calls };
+}
+
+function describeLlmCall({ phase, durationMs, model, provider, promptTokens, outputTokens, attempts }) {
+  const outputRate = durationMs > 0 ? Math.round(outputTokens / (durationMs / 1000)) : 0;
+  return `${phase}: ${(durationMs / 1000).toFixed(1)}s, ${model || '?'} via ${provider || '?'}, `
+    + `${promptTokens} in / ${outputTokens} out tokens, ${outputRate} out tok/s${attempts > 1 ? `, ${attempts} attempts` : ''}`;
 }
 
 function llmExtractEntities(config, transcript, outputLanguage = 'English') {
@@ -336,6 +357,7 @@ if (typeof module !== 'undefined' && module.exports) {
     llmRequest,
     chunkTranscript,
     llmSummarizeLong,
+    describeLlmCall,
     llmExtractEntities,
     llmQuiz,
     llmChat,

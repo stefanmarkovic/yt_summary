@@ -73,6 +73,9 @@ describe('public LLM tasks', () => {
     expect(finalPrompt).toContain('Last part');
     expect(finalPrompt).toContain('TL;DR:');
     expect(storedUsage.tokens).toBe(result.usage.totalTokens);
+    expect(result.calls.map(call => [call.phase, call.promptTokens, call.outputTokens, call.attempts])).toEqual([
+      ['chunk 1/2', 2, 3, 1], ['chunk 2/2', 2, 3, 1], ['final', 2, 3, 1]
+    ]);
   });
   test('oversized intermediate summaries are reduced before the final prompt', async () => {
     const longPartial = 'p'.repeat(100);
