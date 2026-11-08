@@ -1,6 +1,6 @@
 # YT Summary AI — tehnička dokumentacija
 
-Firefox Manifest V3 ekstenzija, verzija 4.5.0. Nema background worker-a: popup pokreće analizu, a stranice rezultata i liste upravljaju svojim aktivnim zahtevima. Zatvaranje tih stranica može prekinuti posao.
+Firefox Manifest V3 ekstenzija, verzija 4.5.1. Nema background worker-a: popup pokreće analizu, a stranice rezultata i liste upravljaju svojim aktivnim zahtevima. Zatvaranje tih stranica može prekinuti posao.
 
 ## Granice modula
 

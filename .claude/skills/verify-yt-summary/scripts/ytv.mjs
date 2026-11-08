@@ -230,6 +230,7 @@ async function daemon(runId) {
     async function contexts() { return (await send('browsingContext.getTree', { maxDepth: 0 })).contexts; }
     async function resolve(target) {
       if (!target) throw new Error('missing <target> (context id or URL substring, e.g. popup.html, result.html, youtube.com)');
+      if (target === 'chrome') return (await send('browsingContext.getTree', { maxDepth: 0, 'moz:scope': 'chrome' })).contexts[0].context;
       const all = await contexts();
       const exact = all.find(c => c.context === target);
       if (exact) return exact.context;

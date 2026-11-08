@@ -55,6 +55,7 @@ To look at it, doctor opens a background `result.html?id=__ytv_probe` tab and cl
 | `type <target> <css> <text> [--env NAME]` | Fills an input: real keystrokes on web pages, per-character `input` events plus `change` on extension pages. `--env` keeps secrets out of argv and the journal. |
 | `select <target> <css> <value>` | Sets a `<select>` and fires `input`/`change`. |
 | `text`, `eval`, `wait <target> <js> [--timeout ms]` | Read state. `wait` polls until the expression is truthy. |
+| `eval chrome <js>` | Evaluates in Firefox's own browser window, not a page. Use it for toolbar state, e.g. `CustomizableUI.getPlacementOfWidget('yt-summary-ai_stefan_local-browser-action').area` is `nav-bar` when the button shows in the toolbar. |
 | `shot <target> <name>`, `storage [name]`, `llm-log`, `downloads` | Evidence. |
 
 The canonical popup recipe, the real user path minus the toolbar click:
