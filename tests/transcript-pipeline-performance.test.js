@@ -77,7 +77,7 @@ describe('processed transcript latency', () => {
     const second = await getProcessedTranscript(7, 'Wno_JVqhnqI');
 
     expect(second.text).toBe(first.text);
-    expect(second.debugLines).toContain('Transcript cache hit');
+    expect(second.debugLines).toEqual(['Transcript cache hit: no page script or SponsorBlock request this run']);
     expect(browser.scripting.executeScript).toHaveBeenCalledTimes(1);
   });
 });
